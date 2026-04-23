@@ -1,0 +1,55 @@
+system:
+  device: cuda  # cuda, cpu, mps
+  mixed_precision: true
+  compile_model: false
+
+models:
+  depth:
+    name: "Zoedepth"
+    model_type: "ZoeD"
+    pretrained: true
+    variant: "kitti"  # kitti, nyu
+    device: "cuda"
+    cache_dir: "models/depth"
+
+  segmentation:
+    name: "SAM"
+    model_type: "vit_h"  # vit_h, vit_l, vit_b
+    checkpoint: "sam_vit_h.pth"
+    device: "cuda"
+    cache_dir: "models/segmentation"
+    points_per_side: 32
+    pred_iou_thresh: 0.86
+    stability_score_thresh: 0.92
+
+  motion:
+    model_type: "raft"  # raft, GMFlow
+    pretrained: true
+    variant: "things"
+    device: "cuda"
+    cache_dir: "models/motion"
+    
+  generation:
+    name: "AnimateDiff"
+    model_id: "stabilityai/stable-diffusion-xl-refiner-1.0"
+    motion_adapter: "guoyww/animatediff-motion-adapter-sdxl-beta"
+    device: "cuda"
+    guidance_scale: 7.5
+    num_inference_steps: 25
+    fps: 8
+    num_frames: 24
+
+processing:
+  target_resolution: [512, 512]  # [height, width]
+  color_space: "RGB"
+  normalize: true
+  center_crop: true
+  preserve_aspect_ratio: true
+
+output:
+  format: "mp4"
+  codec: "libx264"
+  crf: 23
+  preset: "medium"
+  audio: false
+  metadata: true
