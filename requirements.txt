@@ -30,3 +30,11 @@ segment-anything>=1.0.0
 
 # Experimental / Unrestricted models
 # These may require additional setup or custom installations
+
+# =============================================================================
+# API SERVER
+# =============================================================================
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+python-multipart>=0.0.6
+pydantic>=2.0.0
