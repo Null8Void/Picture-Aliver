@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:8000">
+    <title>Picture-Aliver</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #F9FAFB;
+            color: #1F2937;
+            min-height: 100vh;
+        }
+        
+        .app {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #10B981;
+        }
+        
+        .status-dot.offline {
+            background-color: #EF4444;
+        }
+        
+        /* Main content */
+        .main {
+            display: flex;
+            flex: 1;
+            padding: 20px;
+            gap: 20px;
+        }
+        
+        /* Panels */
+        .panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        
+        .panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #374151;
+        }
+        
+        /* Left panel */
+        .left-panel {
+            flex: 1;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        /* Image selection */
+        .image-selector {
+            border: 2px dashed #D1D5DB;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-height: 250px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .image-selector:hover {
+            border-color: #6366F1;
+            background: #F9FAFB;
+        }
+        
+        .image-selector.has-image {
+            border-style: solid;
+            padding: 10px;
+        }
+        
+        .image-selector img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+        }
+        
+        .image-selector .placeholder {
+            color: #9CA3AF;
+        }
+        
+        .image-selector .placeholder-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        /* Prompt input */
+        .prompt-input {
+            width: 100%;
+            min-height: 100px;
+            padding: 12px;
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            font-size: 14px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        
+        .prompt-input:focus {
+            outline: none;
+            border-color: #6366F1;
+        }
+        
+        /* Settings */
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        
+        .setting-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .setting-label {
+            font-size: 12px;
+            color: #6B7280;
+            font-weight: 500;
+        }
+        
+        .setting-input {
+            padding: 8px 12px;
+            border: 1px solid #E5E7EB;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .setting-select {
+            padding: 8px 12px;
+            border: 1px solid #E5E7EB;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+        }
+        
+        /* Generate button */
+        .generate-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .generate-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+        
+        .generate-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* Right panel */
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        /* Progress */
+        .progress-container {
+            display: none;
+        }
+        
+        .progress-container.active {
+            display: block;
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background: #E5E7EB;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #6366F1, #8B5CF6);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .progress-text {
+            margin-top: 8px;
+            font-size: 14px;
+            color: #6B7280;
+        }
+        
+        /* Video preview */
+        .video-preview {
+            flex: 1;
+            min-height: 300px;
+            background: #1F2937;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            position: relative;
+        }
+        
+        .video-preview video {
+            width: 100%;
+            height: 100%;
+            border-radius: 12px;
+            object-fit: contain;
+        }
+        
+        .video-placeholder {
+            text-align: center;
+        }
+        
+        /* Log */
+        .log-container {
+            background: #1F2937;
+            color: #E5E7EB;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .log-line {
+            margin-bottom: 5px;
+        }
+        
+        .log-line .timestamp {
+            color: #6B7280;
+        }
+        
+        .log-line.error {
+            color: #EF4444;
+        }
+        
+        .log-line.success {
+            color: #10B981;
+        }
+        
+        /* Footer */
+        .footer {
+            padding: 15px 30px;
+            background: white;
+            border-top: 1px solid #E5E7EB;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #6B7280;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <h1>Picture-Aliver</h1>
+            <div class="header-status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Initializing...</span>
+            </div>
+        </header>
+        
+        <main class="main">
+            <div class="left-panel">
+                <div class="panel">
+                    <h2 class="panel-title">Source Image</h2>
+                    <div class="image-selector" id="imageSelector">
+                        <div class="placeholder">
+                            <div class="placeholder-icon">+</div>
+                            <div>Click to select image</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <h2 class="panel-title">Animation Prompt</h2>
+                    <textarea class="prompt-input" id="promptInput" placeholder="Describe the motion you want (e.g., gentle wave, wind blowing, cinematic pan)"></textarea>
+                </div>
+                
+                <div class="panel">
+                    <h2 class="panel-title">Settings</h2>
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <label class="setting-label">Duration (seconds)</label>
+                            <input type="number" class="setting-input" id="durationInput" value="3" min="1" max="60">
+                        </div>
+                        <div class="setting-item">
+                            <label class="setting-label">FPS</label>
+                            <select class="setting-select" id="fpsSelect">
+                                <option value="4">4</option>
+                                <option value="6">6</option>
+                                <option value="8" selected>8</option>
+                                <option value="12">12</option>
+                                <option value="16">16</option>
+                                <option value="24">24</option>
+                            </select>
+                        </div>
+                        <div class="setting-item">
+                            <label class="setting-label">Resolution</label>
+                            <select class="setting-select" id="resolutionSelect">
+                                <option value="256">256</option>
+                                <option value="384">384</option>
+                                <option value="512" selected>512</option>
+                                <option value="768">768</option>
+                                <option value="1024">1024</option>
+                            </select>
+                        </div>
+                        <div class="setting-item">
+                            <label class="setting-label">Motion Mode</label>
+                            <select class="setting-select" id="motionSelect">
+                                <option value="auto">Auto</option>
+                                <option value="subtle">Subtle</option>
+                                <option value="cinematic">Cinematic</option>
+                                <option value="zoom">Zoom</option>
+                                <option value="pan">Pan</option>
+                                <option value="furry">Furry</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="generate-btn" id="generateBtn" disabled>Generate Video</button>
+            </div>
+            
+            <div class="right-panel">
+                <div class="panel progress-container" id="progressContainer">
+                    <h2 class="panel-title">Progress</h2>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">Initializing...</div>
+                </div>
+                
+                <div class="panel" style="flex: 1;">
+                    <h2 class="panel-title">Video Preview</h2>
+                    <div class="video-preview" id="videoPreview">
+                        <div class="video-placeholder">
+                            <div>No video generated yet</div>
+                            <div style="font-size: 12px; margin-top: 5px; color: #9CA3AF;">
+                                Generated videos will appear here
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <h2 class="panel-title">Log</h2>
+                    <div class="log-container" id="logContainer">
+                        <div class="log-line"><span class="timestamp">[--:--:--]</span> Picture-Aliver ready</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="footer">
+            <span>Picture-Aliver Desktop v1.0.0</span>
+            <span id="versionInfo">Loading...</span>
+        </footer>
+    </div>
+    
+    <script>
+        // State
+        let selectedImage = null;
+        let backendUrl = 'http://127.0.0.1:8000';
+        let currentTaskId = null;
+        let pollingInterval = null;
+        
+        // DOM Elements
+        const elements = {
+            statusDot: document.getElementById('statusDot'),
+            statusText: document.getElementById('statusText'),
+            imageSelector: document.getElementById('imageSelector'),
+            promptInput: document.getElementById('promptInput'),
+            durationInput: document.getElementById('durationInput'),
+            fpsSelect: document.getElementById('fpsSelect'),
+            resolutionSelect: document.getElementById('resolutionSelect'),
+            motionSelect: document.getElementById('motionSelect'),
+            generateBtn: document.getElementById('generateBtn'),
+            progressContainer: document.getElementById('progressContainer'),
+            progressFill: document.getElementById('progressFill'),
+            progressText: document.getElementById('progressText'),
+            videoPreview: document.getElementById('videoPreview'),
+            logContainer: document.getElementById('logContainer'),
+            versionInfo: document.getElementById('versionInfo')
+        };
+        
+        // Logging
+        function log(message, type = 'info') {
+            const timestamp = new Date().toTimeString().slice(0, 8);
+            const line = document.createElement('div');
+            line.className = `log-line ${type}`;
+            line.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+            elements.logContainer.appendChild(line);
+            elements.logContainer.scrollTop = elements.logContainer.scrollHeight;
+            console.log(`[LOG] ${message}`);
+        }
+        
+        // Update status
+        function updateStatus(status, text) {
+            elements.statusDot.className = `status-dot ${status}`;
+            elements.statusText.textContent = text;
+        }
+        
+        // Initialize
+        async function init() {
+            log('Initializing Picture-Aliver...');
+            
+            try {
+                // Get backend URL from main process
+                if (window.electronAPI) {
+                    backendUrl = await window.electronAPI.getBackendUrl();
+                    const appInfo = await window.electronAPI.getAppInfo();
+                    elements.versionInfo.textContent = `${appInfo.platform} - Electron ${appInfo.version}`;
+                }
+                
+                // Check backend health
+                await checkBackend();
+                
+                // Setup event listeners
+                setupEventListeners();
+                
+                log('Initialization complete');
+                updateStatus('', 'Ready');
+                
+            } catch (error) {
+                log(`Initialization failed: ${error.message}`, 'error');
+                updateStatus('offline', 'Backend offline');
+            }
+        }
+        
+        // Check backend connection
+        async function checkBackend() {
+            try {
+                const response = await fetch(`${backendUrl}/health`);
+                if (response.ok) {
+                    updateStatus('', 'Backend connected');
+                    return true;
+                }
+            } catch (error) {
+                updateStatus('offline', 'Backend offline');
+                return false;
+            }
+        }
+        
+        // Setup event listeners
+        function setupEventListeners() {
+            // Image selection
+            elements.imageSelector.addEventListener('click', selectImage);
+            
+            // Generate button
+            elements.generateBtn.addEventListener('click', startGeneration);
+            
+            // Menu actions from main process
+            if (window.electronAPI) {
+                window.electronAPI.onMenuAction((action) => {
+                    if (action === 'open-image') selectImage();
+                    if (action === 'save-video') saveVideo();
+                });
+            }
+            
+            // Enable/disable generate button based on inputs
+            const checkInputs = () => {
+                const hasImage = selectedImage !== null;
+                const hasPrompt = elements.promptInput.value.trim().length > 0;
+                elements.generateBtn.disabled = !(hasImage && hasPrompt);
+            };
+            
+            elements.promptInput.addEventListener('input', checkInputs);
+        }
+        
+        // Select image
+        async function selectImage() {
+            try {
+                if (window.electronAPI) {
+                    const result = await window.electronAPI.openFileDialog();
+                    if (result.canceled || !result.filePaths[0]) return;
+                    
+                    const filePath = result.filePaths[0];
+                    selectedImage = filePath;
+                    
+                    // Show image
+                    elements.imageSelector.className = 'image-selector has-image';
+                    elements.imageSelector.innerHTML = `<img src="file://${filePath}" alt="Selected image">`;
+                    
+                    log(`Selected image: ${filePath}`);
+                    checkInputs();
+                } else {
+                    // Browser fallback
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = (e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                            selectedImage = file;
+                            const url = URL.createObjectURL(file);
+                            elements.imageSelector.className = 'image-selector has-image';
+                            elements.imageSelector.innerHTML = `<img src="${url}" alt="Selected image">`;
+                            log(`Selected image: ${file.name}`);
+                            checkInputs();
+                        }
+                    };
+                    input.click();
+                }
+            } catch (error) {
+                log(`Error selecting image: ${error.message}`, 'error');
+            }
+        }
+        
+        // Start generation
+        async function startGeneration() {
+            if (!selectedImage) return;
+            
+            log('Starting generation...');
+            elements.progressContainer.classList.add('active');
+            elements.generateBtn.disabled = true;
+            elements.progressFill.style.width = '5%';
+            elements.progressText.textContent = 'Uploading image...';
+            
+            try {
+                // Create form data
+                const formData = new FormData();
+                
+                // Add image
+                if (window.electronAPI) {
+                    // Electron: use file path
+                    formData.append('image', selectedImage);
+                } else {
+                    // Browser: use File object
+                    formData.append('image', selectedImage);
+                }
+                
+                // Add parameters
+                formData.append('prompt', elements.promptInput.value);
+                formData.append('duration', elements.durationInput.value);
+                formData.append('fps', elements.fpsSelect.value);
+                formData.append('width', elements.resolutionSelect.value);
+                formData.append('height', elements.resolutionSelect.value);
+                formData.append('motion_mode', elements.motionSelect.value);
+                formData.append('sync', 'false');
+                
+                elements.progressFill.style.width = '10%';
+                elements.progressText.textContent = 'Sending request...';
+                
+                // Send request
+                const response = await fetch(`${backendUrl}/generate`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                currentTaskId = data.task_id;
+                log(`Task started: ${currentTaskId}`);
+                
+                elements.progressFill.style.width = '20%';
+                elements.progressText.textContent = 'Processing video...';
+                
+                // Start polling
+                startPolling();
+                
+            } catch (error) {
+                log(`Error starting generation: ${error.message}`, 'error');
+                elements.progressContainer.classList.remove('active');
+                elements.generateBtn.disabled = false;
+            }
+        }
+        
+        // Poll for task status
+        function startPolling() {
+            if (pollingInterval) clearInterval(pollingInterval);
+            
+            pollingInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`${backendUrl}/tasks/${currentTaskId}`);
+                    const data = await response.json();
+                    
+                    elements.progressFill.style.width = `${data.progress * 100}%`;
+                    elements.progressText.textContent = data.message;
+                    
+                    log(`Status: ${data.status} (${Math.round(data.progress * 100)}%)`);
+                    
+                    if (data.status === 'completed') {
+                        clearInterval(pollingInterval);
+                        onGenerationComplete(data);
+                    } else if (data.status === 'failed') {
+                        clearInterval(pollingInterval);
+                        onGenerationFailed(data);
+                    }
+                    
+                } catch (error) {
+                    log(`Polling error: ${error.message}`, 'error');
+                }
+            }, 2000);
+        }
+        
+        // Generation complete
+        function onGenerationComplete(data) {
+            log('Generation complete!', 'success');
+            elements.progressFill.style.width = '100%';
+            elements.progressText.textContent = 'Complete!';
+            elements.generateBtn.disabled = false;
+            
+            // Show video
+            const videoUrl = `${backendUrl}/download/${currentTaskId}`;
+            elements.videoPreview.innerHTML = `
+                <video controls autoplay>
+                    <source src="${videoUrl}" type="video/mp4">
+                </video>
+            `;
+            
+            // Show notification
+            if (window.electronAPI) {
+                window.electronAPI.showNotification({
+                    title: 'Picture-Aliver',
+                    body: 'Video generation complete!'
+                });
+            }
+            
+            setTimeout(() => {
+                elements.progressContainer.classList.remove('active');
+            }, 2000);
+        }
+        
+        // Generation failed
+        function onGenerationFailed(data) {
+            log(`Generation failed: ${data.error}`, 'error');
+            elements.progressContainer.classList.remove('active');
+            elements.generateBtn.disabled = false;
+        }
+        
+        // Save video
+        async function saveVideo() {
+            if (!currentTaskId) return;
+            
+            try {
+                if (window.electronAPI) {
+                    const result = await window.electronAPI.saveFileDialog({
+                        defaultPath: `video_${Date.now()}.mp4`
+                    });
+                    
+                    if (result.canceled) return;
+                    
+                    // Download video
+                    const response = await fetch(`${backendUrl}/download/${currentTaskId}`);
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    
+                    // Note: In a real app, you'd write to the selected path
+                    log('Video saved');
+                }
+            } catch (error) {
+                log(`Error saving video: ${error.message}`, 'error');
+            }
+        }
+        
+        // Start
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# Picture-Aliver Desktop App (PyQt5) Dependencies
+
+# Core UI
+PyQt5>=5.15.0
+
+# For building executable
+pyinstaller>=5.13.0
+pyinstaller-hooks-contrib>=2023.0
+
+# Optional: for better UI theming
+qt-material>=2.8.0
+
+# Note: All pipeline dependencies are in requirements.txt
+# This file contains only PyQt-specific dependencies
