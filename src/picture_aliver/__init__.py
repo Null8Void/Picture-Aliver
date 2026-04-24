@@ -1,7 +1,8 @@
 """
 Picture-Aliver: AI-Powered Image to Video Animation System
 
-A production-grade system for converting single images into coherent animated videos.
+Complete pipeline for converting images to animated videos.
+Supports all content types including human, furry, landscape, and objects.
 """
 
 from __future__ import annotations
@@ -13,7 +14,8 @@ from .motion_generator import (
     MotionGenerator, MotionField, MotionMode, CameraTrajectory, FurryMotionGenerator
 )
 from .motion_prompt import (
-    MotionPromptParser, MotionPromptMapper, MotionParameters, MotionCategory, MotionIntensity
+    MotionPromptParser, MotionPromptMapper, MotionParameters, 
+    MotionCategory, MotionIntensity
 )
 from .video_generator import VideoGenerator, VideoFrames, GenerationConfig
 from .text_to_image import TextToImageGenerator, TextToVideoGenerator, T2IConfig
@@ -30,7 +32,7 @@ from .gpu_optimization import (
     GPUOptimizer, VRAMTier, GPUConfig, ModelOffloader,
     optimize_model_for_device, print_benchmark_table
 )
-from .main import PictureAliver
+from .main import Pipeline, PipelineConfig, PipelineResult, run_pipeline
 
 __version__ = "1.0.0"
 
@@ -54,51 +56,61 @@ __all__ = [
     "VideoGenerator",
     "VideoFrames",
     "GenerationConfig",
+    "TextToImageGenerator",
+    "TextToVideoGenerator",
+    "T2IConfig",
     "VideoStabilizer",
     "StabilizationConfig",
     "VideoExporter",
     "ExportConfig",
     "VideoFormat",
+    "VideoSpec",
+    "ExportOptions",
+    "QualityPreset",
+    "Codec",
     "export_video",
-    "PictureAliver",
+    "QualityController",
+    "QualityReport",
+    "QualityDetector",
+    "QualityIssue",
+    "assess_video_quality",
+    "GPUOptimizer",
+    "VRAMTier",
+    "GPUConfig",
+    "ModelOffloader",
+    "optimize_model_for_device",
+    "print_benchmark_table",
+    "Pipeline",
+    "PipelineConfig",
+    "PipelineResult",
+    "run_pipeline",
 ]
 
 __doc__ = """
-Picture-Aliver: AI Image to Video Animation System
-===================================================
+Picture-Aliver: Complete AI Image-to-Video Pipeline
+==================================================
 
-Features:
-- Depth estimation using MiDaS/ZoeDepth
-- Semantic segmentation with content type detection
-- Multi-mode motion generation (cinematic, zoom, pan, furry-specific)
-- Natural language motion prompts ("gentle tail wag", "dramatic zoom")
-- Diffusion-based video generation
-- Temporal stabilization
-- Multiple export formats (MP4, WebM, GIF)
-
-Usage:
-    from picture_aliver import PictureAliver
+Quick Start:
+    from picture_aliver import run_pipeline, PipelineConfig
     
-    system = PictureAliver()
-    system.initialize()
-    
-    # Using motion mode
-    metadata = system.process(
+    result = run_pipeline(
         image_path="input.jpg",
         output_path="output.mp4",
-        motion_mode="cinematic",
-        num_frames=24
-    )
-    
-    # Using natural language motion prompt
-    metadata = system.process(
-        image_path="furry.png",
-        output_path="animation.mp4",
-        motion_prompt="gentle tail wag with breathing"
+        config=PipelineConfig(duration_seconds=10, fps=24)
     )
 
-Requirements:
-- PyTorch 2.0+
-- CUDA-capable GPU (recommended)
-- FFmpeg (for video export)
+Pipeline Steps:
+    1. Image Loader
+    2. Depth Estimation (MiDaS)
+    3. Segmentation (SAM)
+    4. Motion Generator
+    5. Video Diffusion
+    6. Stabilization
+    7. Frame Interpolation
+    8. Export (FFmpeg)
+
+GPU Requirements:
+    - Minimum: 2GB VRAM (low resolution, short clips)
+    - Recommended: 8GB VRAM (720p, 30s clips)
+    - Optimal: 12GB+ VRAM (1080p, 60s+ clips)
 """
