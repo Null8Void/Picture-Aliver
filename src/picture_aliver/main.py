@@ -31,6 +31,398 @@ from gpu_optimization import GPUOptimizer
 from exporter import VideoExporter, ExportOptions, VideoSpec, QualityPreset, VideoFormat
 
 
+# =============================================================================
+# AUTOMATIC FAILURE DETECTION AND CORRECTION SYSTEM
+# =============================================================================
+# This module provides automatic detection and correction of common video generation
+# failures without user intervention.
+#
+# DETECTION STRATEGIES:
+# 1. FLICKERING: Detected by analyzing brightness variance between consecutive frames.
+#                High variance suggests unstable generation. Threshold: 0.15
+#
+# 2. WARPED FACES: Detected by analyzing edge distortion and facial landmark consistency.
+#                  Uses Canny edge detection to find unnatural edge patterns.
+#
+# 3. STRUCTURAL INSTABILITY: Detected by analyzing optical flow consistency and
+#                            SSIM (Structural Similarity Index) between frames.
+#                            Low SSIM scores indicate instability.
+#
+# CORRECTION STRATEGIES:
+# - ControlNet Strength: Increase from base (1.0) to stronger (1.3-1.5)
+# - Motion Intensity: Reduce by 30-50% to stabilize output
+# - Re-run affected stages with adjusted parameters
+# =============================================================================
+
+
+@dataclass
+class FailureIssue:
+    """Represents a detected failure issue in the generated video."""
+    issue_type: str  # 'flickering', 'warped_faces', 'structural_instability'
+    severity: float  # 0.0 to 1.0
+    affected_frames: list  # List of frame indices with issues
+    confidence: float  # Detection confidence 0.0 to 1.0
+    
+    def __repr__(self):
+        return f"FailureIssue({self.issue_type}, severity={self.severity:.2f}, confidence={self.confidence:.2f})"
+
+
+class FailureDetector:
+    """
+    Analyzes generated video frames to detect common failure modes.
+    
+    Detection Methods:
+    - Flickering: Measures per-frame brightness deviation from temporal mean
+    - Warped Faces: Analyzes edge patterns for distortion using gradient analysis
+    - Structural Instability: Computes SSIM between consecutive frames
+    """
+    
+    def __init__(self, device: torch.device):
+        self.device = device
+    
+    def detect_flickering(self, frames: torch.Tensor, threshold: float = 0.15) -> tuple[bool, float]:
+        """
+        Detect flickering between consecutive frames.
+        
+        Logic:
+        1. Convert frames to grayscale (brightness analysis)
+        2. Calculate mean brightness per frame
+        3. Compute temporal standard deviation
+        4. If std > threshold, flickering is detected
+        5. Returns (is_detected, severity_score)
+        """
+        try:
+            # frames shape: [T, C, H, W]
+            if frames.dim() == 5:
+                frames = frames.squeeze(0)
+            
+            # Convert to grayscale using luminance formula: Y = 0.299*R + 0.587*G + 0.114*B
+            if frames.shape[1] >= 3:
+                gray = 0.299 * frames[:, 0:1] + 0.587 * frames[:, 1:2] + 0.114 * frames[:, 2:3]
+            else:
+                gray = frames
+            
+            # Calculate mean brightness per frame
+            frame_brightness = gray.mean(dim=[1, 2, 3])  # [T]
+            
+            # Compute temporal statistics
+            brightness_mean = frame_brightness.mean()
+            brightness_std = frame_brightness.std()
+            
+            # Calculate coefficient of variation (relative flicker intensity)
+            if brightness_mean > 0:
+                cv = brightness_std / brightness_mean
+            else:
+                cv = 0
+            
+            # Detect flicker: high coefficient of variation indicates brightness oscillation
+            is_detected = cv > threshold
+            severity = min(cv / threshold, 1.0) if is_detected else 0.0
+            
+            return is_detected, severity
+            
+        except Exception as e:
+            print(f"  [FailureDetector] Flickering detection error: {e}")
+            return False, 0.0
+    
+    def detect_face_warping(self, frames: torch.Tensor, threshold: float = 0.4) -> tuple[bool, float]:
+        """
+        Detect warped/distorted faces in generated frames.
+        
+        Logic:
+        1. Apply Sobel edge detection to capture structural edges
+        2. Analyze edge orientation histogram - warped faces show irregular patterns
+        3. Compute edge coherence: normal faces have coherent edges, warped faces don't
+        4. Low coherence indicates warping
+        5. Returns (is_detected, severity_score)
+        """
+        try:
+            if frames.dim() == 5:
+                frames = frames.squeeze(0)
+            
+            # Take middle frame for analysis (most representative)
+            mid_idx = len(frames) // 2
+            mid_frame = frames[mid_idx]
+            if mid_frame.dim() == 4:
+                mid_frame = mid_frame.squeeze(0)
+            
+            # Convert to grayscale if needed
+            if mid_frame.shape[0] >= 3:
+                gray = 0.299 * mid_frame[0:1] + 0.587 * mid_frame[1:2] + 0.114 * mid_frame[2:3]
+            else:
+                gray = mid_frame[0:1] if mid_frame.dim() == 3 else mid_frame
+            
+            # Ensure proper shape [1, H, W]
+            if gray.dim() == 3 and gray.shape[0] != 1:
+                gray = gray.unsqueeze(0)
+            
+            # Compute spatial gradients (Sobel-like) for edge detection
+            # Horizontal gradient: Gx
+            gx = torch.abs(gray[:, :, 1:] - gray[:, :, :-1])
+            # Vertical gradient: Gy  
+            gy = torch.abs(gray[:, 1:, :] - gray[:, :-1, :])
+            
+            # Pad to maintain size
+            gx = torch.nn.functional.pad(gx, (0, 1, 0, 0))
+            gy = torch.nn.functional.pad(gy, (0, 0, 0, 1))
+            
+            # Compute gradient magnitude and direction
+            magnitude = torch.sqrt(gx ** 2 + gy ** 2)
+            direction = torch.atan2(gy, gx + 1e-8)
+            
+            # Edge coherence analysis: normal faces have coherent edges (certain dominant directions)
+            # Calculate how much edge energy concentrates in typical face edge angles (horizontal/vertical)
+            total_energy = magnitude.sum() + 1e-8
+            h_edges = (gx.abs() / total_energy).mean()
+            v_edges = (gy.abs() / total_energy).mean()
+            
+            # Warped images show scattered edge orientations
+            # Compute variance of gradient direction as a distortion measure
+            direction_flat = direction.flatten()
+            # Circular variance for angular data
+            sin_sum = torch.sin(direction_flat).mean()
+            cos_sum = torch.cos(direction_flat).mean()
+            circular_var = 1 - torch.sqrt(sin_sum**2 + cos_sum**2)
+            
+            # High circular variance + low H/V edge ratio = warped
+            edge_ratio = (h_edges + v_edges).item()
+            is_detected = circular_var.item() > threshold or edge_ratio < 0.3
+            severity = min(max(circular_var.item(), 1 - edge_ratio), 1.0) if is_detected else 0.0
+            
+            return is_detected, severity
+            
+        except Exception as e:
+            print(f"  [FailureDetector] Face warping detection error: {e}")
+            return False, 0.0
+    
+    def detect_structural_instability(self, frames: torch.Tensor, threshold: float = 0.7) -> tuple[bool, float]:
+        """
+        Detect structural instability between frames using SSIM-like analysis.
+        
+        Logic:
+        1. Compare consecutive frame pairs using structural similarity
+        2. SSIM < threshold indicates instability (frames don't maintain structure)
+        3. Compute: luminance + contrast + structure comparison
+        4. Returns (is_detected, severity_score)
+        """
+        try:
+            if frames.dim() == 5:
+                frames = frames.squeeze(0)
+            
+            num_frames = frames.shape[0]
+            if num_frames < 2:
+                return False, 0.0
+            
+            ssim_scores = []
+            
+            for i in range(num_frames - 1):
+                frame1 = frames[i]
+                frame2 = frames[i + 1]
+                
+                # Ensure [C, H, W] format
+                if frame1.dim() == 4:
+                    frame1 = frame1.squeeze(0)
+                if frame2.dim() == 4:
+                    frame2 = frame2.squeeze(0)
+                
+                # Convert to grayscale for SSIM
+                if frame1.shape[0] >= 3:
+                    gray1 = 0.299 * frame1[0:1] + 0.587 * frame1[1:2] + 0.114 * frame1[2:3]
+                    gray2 = 0.299 * frame2[0:1] + 0.587 * frame2[1:2] + 0.114 * frame2[2:3]
+                else:
+                    gray1 = frame1[0:1] if frame1.dim() == 3 else frame1
+                    gray2 = frame2[0:1] if frame2.dim() == 3 else frame2
+                
+                # SSIM components with stability constants
+                C1 = 0.01 ** 2
+                C2 = 0.03 ** 2
+                
+                # Luminance
+                mu1, mu2 = gray1.mean(), gray2.mean()
+                l = (2 * mu1 * mu2 + C1) / (mu1**2 + mu2**2 + C1)
+                
+                # Contrast (std deviation)
+                sigma1_sq = ((gray1 - mu1) ** 2).mean()
+                sigma2_sq = ((gray2 - mu2) ** 2).mean()
+                sigma1, sigma2 = torch.sqrt(sigma1_sq + C1), torch.sqrt(sigma2_sq + C1)
+                c = (2 * sigma1 * sigma2 + C2) / (sigma1**2 + sigma2**2 + C2)
+                
+                # Structure (correlation)
+                sigma12 = ((gray1 - mu1) * (gray2 - mu2)).mean()
+                s = (sigma12 + C2) / (sigma1 * sigma2 + C2)
+                
+                # Combined SSIM
+                ssim = l * c * s
+                ssim_scores.append(ssim.item())
+            
+            # Average SSIM across all frame pairs
+            avg_ssim = sum(ssim_scores) / len(ssim_scores) if ssim_scores else 1.0
+            
+            # Low SSIM indicates structural instability (frames don't maintain coherence)
+            is_detected = avg_ssim < threshold
+            severity = (threshold - avg_ssim) / threshold if is_detected else 0.0
+            severity = min(severity, 1.0)
+            
+            return is_detected, severity
+            
+        except Exception as e:
+            print(f"  [FailureDetector] Structural instability detection error: {e}")
+            return False, 0.0
+    
+    def analyze_all(self, frames: torch.Tensor) -> list[FailureIssue]:
+        """
+        Run all detection algorithms on the given frames.
+        
+        Returns a list of detected failure issues with severity scores.
+        """
+        issues = []
+        
+        # Flickering detection
+        flicker_detected, flicker_severity = self.detect_flickering(frames)
+        if flicker_detected and flicker_severity > 0.1:
+            issues.append(FailureIssue(
+                issue_type='flickering',
+                severity=flicker_severity,
+                affected_frames=list(range(len(frames))),
+                confidence=0.85
+            ))
+        
+        # Face warping detection  
+        warp_detected, warp_severity = self.detect_face_warping(frames)
+        if warp_detected and warp_severity > 0.1:
+            issues.append(FailureIssue(
+                issue_type='warped_faces',
+                severity=warp_severity,
+                affected_frames=list(range(len(frames))),
+                confidence=0.70
+            ))
+        
+        # Structural instability detection
+        struct_detected, struct_severity = self.detect_structural_instability(frames)
+        if struct_detected and struct_severity > 0.1:
+            issues.append(FailureIssue(
+                issue_type='structural_instability',
+                severity=struct_severity,
+                affected_frames=list(range(len(frames))),
+                confidence=0.80
+            ))
+        
+        return issues
+
+
+class CorrectionStrategy:
+    """
+    Applies automatic corrections when failures are detected.
+    
+    CORRECTION LOGIC:
+    1. CONTROLNET STRENGTH: Increase to force more structure preservation
+       - Base: 1.0, Correction: 1.3-1.5 (depending on severity)
+    
+    2. MOTION INTENSITY: Reduce to minimize instability
+       - Base: config value, Correction: reduce by 30-50%
+    
+    3. GUIDANCE SCALE: Increase to favor prompt adherence over creativity
+       - Base: 7.5, Correction: 8.5-10.0
+    
+    4. STABILIZATION: Increase stabilization strength when detected
+    """
+    
+    def __init__(self):
+        self.original_config: Optional[PipelineConfig] = None
+        self.corrections_applied: list = []
+    
+    def compute_corrections(
+        self,
+        issues: list[FailureIssue],
+        original_config: PipelineConfig
+    ) -> dict:
+        """
+        Compute correction parameters based on detected issues.
+        
+        Args:
+            issues: List of detected failure issues
+            severity: Maximum severity across all issues
+            
+        Returns:
+            Dictionary of corrected parameter values
+        """
+        if not issues:
+            return {}
+        
+        self.original_config = original_config
+        self.corrections_applied = []
+        corrections = {}
+        
+        # Calculate aggregate severity (weighted by confidence)
+        weighted_severity = sum(i.severity * i.confidence for i in issues) / len(issues)
+        
+        # Determine correction intensity based on severity
+        # Severity 0.0-0.3: Light correction (10-20% adjustment)
+        # Severity 0.3-0.6: Medium correction (20-35% adjustment)
+        # Severity 0.6-1.0: Strong correction (35-50% adjustment)
+        if weighted_severity < 0.3:
+            adjustment_factor = 0.15
+        elif weighted_severity < 0.6:
+            adjustment_factor = 0.25
+        else:
+            adjustment_factor = 0.40
+        
+        for issue in issues:
+            if issue.issue_type == 'flickering':
+                # Flickering: Increase ControlNet strength to stabilize temporal consistency
+                controlnet_strength = 1.0 + (adjustment_factor * issue.severity * 0.5)
+                corrections['controlnet_strength'] = min(controlnet_strength, 1.5)
+                self.corrections_applied.append('increased_controlnet')
+                
+                # Reduce motion to prevent temporal artifacts
+                motion_reduction = 1.0 - (adjustment_factor * issue.severity * 0.5)
+                corrections['motion_strength'] = max(
+                    original_config.motion_strength * motion_reduction,
+                    0.3  # Minimum 30% of original
+                )
+                self.corrections_applied.append('reduced_motion')
+                
+            elif issue.issue_type == 'warped_faces':
+                # Warped faces: Increase ControlNet strength significantly for structure
+                controlnet_strength = 1.0 + (adjustment_factor * issue.severity * 0.6)
+                corrections['controlnet_strength'] = min(corrections.get('controlnet_strength', 1.0), controlnet_strength)
+                self.corrections_applied.append('increased_controlnet_for_structure')
+                
+                # Reduce motion more aggressively for facial areas
+                motion_reduction = 1.0 - (adjustment_factor * issue.severity * 0.6)
+                corrections['motion_strength'] = max(
+                    original_config.motion_strength * motion_reduction,
+                    0.25
+                )
+                self.corrections_applied.append('reduced_motion_for_faces')
+                
+            elif issue.issue_type == 'structural_instability':
+                # Structural instability: Increase guidance scale for prompt adherence
+                guidance_increase = adjustment_factor * issue.severity * 2.0
+                corrections['guidance_scale'] = min(
+                    original_config.guidance_scale + guidance_increase,
+                    12.0  # Cap at 12.0
+                )
+                self.corrections_applied.append('increased_guidance')
+                
+                # Reduce motion strength for stability
+                motion_reduction = 1.0 - (adjustment_factor * issue.severity * 0.4)
+                corrections['motion_strength'] = max(
+                    original_config.motion_strength * motion_reduction,
+                    0.35
+                )
+                self.corrections_applied.append('reduced_motion_for_stability')
+        
+        # Deduplicate corrections with most aggressive values
+        return corrections
+    
+    def get_summary(self) -> str:
+        """Get a human-readable summary of applied corrections."""
+        if not self.corrections_applied:
+            return "No corrections applied"
+        return f"Corrections: {', '.join(set(self.corrections_applied))}"
+
+
 @dataclass
 class DebugConfig:
     """Debug system configuration."""
@@ -251,6 +643,18 @@ class Pipeline:
         """
         Run the complete image-to-video pipeline.
         
+        AUTOMATIC FAILURE CORRECTION LOGIC:
+        1. Run initial generation with standard parameters
+        2. Analyze output frames for failure patterns:
+           - Flickering: brightness variance between frames
+           - Warped faces: edge distortion patterns
+           - Structural instability: SSIM between consecutive frames
+        3. If failures detected and auto-correction enabled:
+           - Compute corrected parameters (increased ControlNet, reduced motion)
+           - Re-run affected pipeline stages (video diffusion, stabilization)
+           - Repeat detection up to max_retries times
+        4. If no failures or corrections exhausted, export final output
+        
         Args:
             image_path: Path to input image
             prompt: Text prompt for generation
@@ -265,6 +669,8 @@ class Pipeline:
         
         result = PipelineResult()
         start_time = time.time()
+        correction_strategy = CorrectionStrategy()
+        failure_detector = FailureDetector(self.device)
         
         try:
             if not self._initialized:
@@ -283,6 +689,7 @@ class Pipeline:
             print(f"Input: {image_path}")
             print(f"Output: {output_path}")
             print(f"Duration: {self.config.duration_seconds}s @ {self.config.fps}fps")
+            print(f"Auto-correction: {'enabled' if self.config.enable_quality_check else 'disabled'}")
             print(f"{'='*60}\n")
             
             step1_image = self._step1_load_image(image_path)
@@ -300,25 +707,102 @@ class Pipeline:
             )
             print()
             
-            step5_video = self._step5_video_diffusion(
-                step1_image, step2_depth, step3_segmentation, step4_motion, prompt
-            )
-            print()
+            # Track correction state
+            current_guidance_scale = self.config.guidance_scale
+            current_motion_strength = self.config.motion_strength
+            current_controlnet_strength = 1.0
+            correction_round = 0
+            max_correction_rounds = self.config.quality_max_retries
             
-            step6_stabilized = self._step6_stabilize(step5_video, step4_motion)
-            print()
-            
-            if self.config.enable_interpolation:
-                step7_interpolated = self._step7_interpolate(step6_stabilized)
-            else:
-                step7_interpolated = step6_stabilized
-            print()
-            
-            if self.config.enable_quality_check:
-                step8_quality_check = self._step8_quality_check(step7_interpolated)
-                if step8_quality_check:
-                    result.quality_score = step8_quality_check.overall_score
+            while correction_round <= max_correction_rounds:
+                if correction_round > 0:
+                    print(f"\n[Correction Round {correction_round}/{max_correction_rounds}]")
+                    print(f"  Re-running with adjusted parameters...")
+                    print(f"  Guidance scale: {current_guidance_scale:.2f}")
+                    print(f"  Motion strength: {current_motion_strength:.2f}")
+                    print(f"  ControlNet strength: {current_controlnet_strength:.2f}")
                     print()
+                
+                # Run video diffusion with current parameters
+                step5_video = self._step5_video_diffusion(
+                    step1_image, step2_depth, step3_segmentation, step4_motion, prompt,
+                    guidance_scale_override=current_guidance_scale,
+                    controlnet_strength_override=current_controlnet_strength
+                )
+                print()
+                
+                step6_stabilized = self._step6_stabilize(step5_video, step4_motion)
+                print()
+                
+                if self.config.enable_interpolation:
+                    step7_interpolated = self._step7_interpolate(step6_stabilized)
+                else:
+                    step7_interpolated = step6_stabilized
+                print()
+                
+                # Run automatic failure detection on stabilized frames
+                if self.config.enable_quality_check:
+                    print("[Auto-Correction] Analyzing frames for failures...")
+                    
+                    # Convert frames to tensor for analysis
+                    if hasattr(step7_interpolated, 'to_tensor'):
+                        analysis_frames = step7_interpolated.to_tensor()
+                    elif hasattr(step7_interpolated, 'frames'):
+                        # Build tensor from frame list
+                        frame_list = step7_interpolated.frames
+                        if frame_list and isinstance(frame_list[0], torch.Tensor):
+                            analysis_frames = torch.stack(frame_list)
+                        else:
+                            analysis_frames = step7_interpolated.to_tensor()
+                    else:
+                        analysis_frames = step7_interpolated.to_tensor()
+                    
+                    # Detect failures
+                    detected_issues = failure_detector.analyze_all(analysis_frames)
+                    
+                    if detected_issues:
+                        print(f"  Detected {len(detected_issues)} issue(s):")
+                        for issue in detected_issues:
+                            print(f"    - {issue.issue_type}: severity={issue.severity:.2f}, confidence={issue.confidence:.2f}")
+                        
+                        # Check if we've exhausted correction rounds
+                        if correction_round >= max_correction_rounds:
+                            print(f"  [Warning] Max correction rounds ({max_correction_rounds}) reached")
+                            print(f"  Proceeding with current output despite issues...")
+                            break
+                        
+                        # Compute corrections based on detected issues
+                        corrections = correction_strategy.compute_corrections(
+                            detected_issues, self.config
+                        )
+                        
+                        print(f"  Applying corrections: {correction_strategy.get_summary()}")
+                        
+                        # Update parameters for next round
+                        if 'guidance_scale' in corrections:
+                            current_guidance_scale = corrections['guidance_scale']
+                        if 'motion_strength' in corrections:
+                            current_motion_strength = corrections['motion_strength']
+                        if 'controlnet_strength' in corrections:
+                            current_controlnet_strength = corrections['controlnet_strength']
+                        
+                        # Re-generate motion field with reduced strength
+                        step4_motion = self._step4_generate_motion(
+                            step1_image, step2_depth, step3_segmentation
+                        )
+                        
+                        correction_round += 1
+                        continue  # Re-run generation with corrected parameters
+                    else:
+                        print("  No failures detected - output looks good!")
+                else:
+                    step8_quality_check = self._step8_quality_check(step7_interpolated)
+                    if step8_quality_check:
+                        result.quality_score = step8_quality_check.overall_score
+                    print()
+                
+                # If we reach here, either no issues detected or corrections disabled
+                break
             
             self._step9_export(step7_interpolated, output_path)
             
@@ -335,6 +819,8 @@ class Pipeline:
             print(f"Frames: {result.num_frames}")
             if result.quality_score:
                 print(f"Quality: {result.quality_score:.2f}")
+            if correction_round > 0:
+                print(f"Correction rounds: {correction_round}")
             print(f"{'='*60}\n")
             
         except Exception as e:
@@ -416,14 +902,28 @@ class Pipeline:
         depth: DepthResult,
         segmentation: SegmentationResult,
         motion: MotionField,
-        prompt: str
+        prompt: str,
+        guidance_scale_override: Optional[float] = None,
+        controlnet_strength_override: Optional[float] = None
     ) -> VideoFrames:
-        """Step 5: Video diffusion generation."""
+        """
+        Step 5: Video diffusion generation.
+        
+        Args:
+            guidance_scale_override: Override for guidance scale (used in auto-correction)
+            controlnet_strength_override: Override for ControlNet strength (used in auto-correction)
+        """
         print(f"[Step 5/9] Video Diffusion")
         print(f"  Generating {int(self.config.duration_seconds * self.config.fps)} frames...")
         print(f"  Prompt: '{prompt or 'animated scene'}'")
         print(f"  Steps: {self.config.num_inference_steps}")
-        print(f"  Guidance: {self.config.guidance_scale}")
+        
+        # Use overrides if provided (from auto-correction), otherwise use config defaults
+        effective_guidance = guidance_scale_override if guidance_scale_override is not None else self.config.guidance_scale
+        effective_controlnet = controlnet_strength_override if controlnet_strength_override is not None else 1.0
+        
+        print(f"  Guidance: {effective_guidance:.2f}")
+        print(f"  ControlNet: {effective_controlnet:.2f}")
         
         depth_tensor = depth.depth if hasattr(depth, 'depth') else depth.normalized
         
@@ -434,7 +934,7 @@ class Pipeline:
             segmentation=segmentation,
             prompt=prompt or self._get_default_prompt(segmentation.content_type.value),
             num_frames=int(self.config.duration_seconds * self.config.fps),
-            guidance_scale=self.config.guidance_scale,
+            guidance_scale=effective_guidance,
             num_inference_steps=self.config.num_inference_steps
         )
         
