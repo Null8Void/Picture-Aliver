@@ -13,8 +13,11 @@ import traceback
 from pathlib import Path
 from typing import Optional, Union, Dict, Any
 from dataclasses import dataclass, field
+from datetime import datetime
 
 import torch
+import numpy as np
+from PIL import Image
 
 from image_loader import ImageLoader
 from depth_estimator import DepthEstimator, DepthResult
@@ -26,6 +29,114 @@ from text_to_image import TextToImageGenerator, TextToVideoGenerator
 from quality_control import QualityController, QualityReport
 from gpu_optimization import GPUOptimizer
 from exporter import VideoExporter, ExportOptions, VideoSpec, QualityPreset, VideoFormat
+
+
+@dataclass
+class DebugConfig:
+    """Debug system configuration."""
+    enabled: bool = False
+    directory: str = "./debug"
+    save_depth_maps: bool = True
+    save_segmentation_masks: bool = True
+    save_raw_frames: bool = True
+    save_stabilized_frames: bool = True
+    save_motion_fields: bool = True
+    format: str = "png"
+    frame_interval: int = 1
+
+
+class DebugSaver:
+    """Save intermediate pipeline outputs for debugging."""
+    
+    def __init__(self, config: DebugConfig, run_id: Optional[str] = None):
+        self.config = config
+        if run_id is None:
+            run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.run_dir = Path(config.directory) / run_id
+        self._created = False
+    
+    def _ensure_dir(self) -> None:
+        if not self._created:
+            self.run_dir.mkdir(parents=True, exist_ok=True)
+            (self.run_dir / "depth").mkdir(exist_ok=True)
+            (self.run_dir / "segmentation").mkdir(exist_ok=True)
+            (self.run_dir / "frames_raw").mkdir(exist_ok=True)
+            (self.run_dir / "frames_stabilized").mkdir(exist_ok=True)
+            (self.run_dir / "motion").mkdir(exist_ok=True)
+            self._created = True
+    
+    def save_depth_map(self, depth: torch.Tensor, step: int = 1) -> None:
+        if not self.config.enabled or not self.config.save_depth_maps:
+            return
+        self._ensure_dir()
+        try:
+            depth_np = depth.detach().cpu().numpy()
+            if depth_np.ndim == 3:
+                depth_np = depth_np[0]
+            depth_normalized = ((depth_np - depth_np.min()) / (depth_np.max() - depth_np.min() + 1e-8) * 255).astype(np.uint8)
+            Image.fromarray(depth_normalized).save(self.run_dir / "depth" / f"depth_step{step:02d}.{self.config.format}")
+            print(f"  [Debug] Saved depth map: depth/step{step:02d}.{self.config.format}")
+        except Exception as e:
+            print(f"  [Debug] Failed to save depth: {e}")
+    
+    def save_segmentation(self, segmentation: SegmentationResult, step: int = 1) -> None:
+        if not self.config.enabled or not self.config.save_segmentation_masks:
+            return
+        self._ensure_dir()
+        try:
+            if hasattr(segmentation, 'mask') and segmentation.mask is not None:
+                mask = segmentation.mask.detach().cpu().numpy()
+                if mask.ndim == 3:
+                    mask = mask[0]
+                mask_normalized = (mask * 255).astype(np.uint8)
+                Image.fromarray(mask_normalized).save(self.run_dir / "segmentation" / f"mask_step{step:02d}.{self.config.format}")
+                print(f"  [Debug] Saved segmentation: segmentation/mask_step{step:02d}.{self.config.format}")
+        except Exception as e:
+            print(f"  [Debug] Failed to save segmentation: {e}")
+    
+    def save_frames(self, frames: VideoFrames, prefix: str, step: int = 1) -> None:
+        if not self.config.enabled:
+            return
+        is_stabilized = "stabilized" in prefix
+        if is_stabilized and not self.config.save_stabilized_frames:
+            return
+        if not is_stabilized and not self.config.save_raw_frames:
+            return
+        self._ensure_dir()
+        try:
+            frame_list = frames.to_list() if hasattr(frames, 'to_list') else []
+            if not frame_list and hasattr(frames, 'frames'):
+                frame_list = [f.detach().cpu().numpy().transpose(1, 2, 0) if f.ndim == 3 else f.detach().cpu().numpy() for f in frames.frames]
+            for i, frame in enumerate(frame_list):
+                if i % self.config.frame_interval != 0:
+                    continue
+                if frame.ndim == 3 and frame.shape[0] == 3:
+                    frame = frame.transpose(1, 2, 0)
+                frame_uint8 = (np.clip(frame, 0, 1) * 255).astype(np.uint8) if frame.max() <= 1 else frame.astype(np.uint8)
+                Image.fromarray(frame_uint8).save(self.run_dir / f"frames_{prefix}" / f"frame_{i:04d}.{self.config.format}")
+            print(f"  [Debug] Saved {len(frame_list)} frames: frames_{prefix}/")
+        except Exception as e:
+            print(f"  [Debug] Failed to save frames: {e}")
+    
+    def save_motion_field(self, motion: MotionField, step: int = 1) -> None:
+        if not self.config.enabled or not self.config.save_motion_fields:
+            return
+        self._ensure_dir()
+        try:
+            if hasattr(motion, 'flows') and motion.flows:
+                flow = motion.flows[-1]
+                if isinstance(flow, torch.Tensor):
+                    flow = flow.cpu().numpy()
+                flow_vis = np.zeros((flow.shape[0], flow.shape[1], 3), dtype=np.uint8)
+                magnitude = np.sqrt(flow[..., 0]**2 + flow[..., 1]**2)
+                angle = np.arctan2(flow[..., 1], flow[..., 0])
+                flow_vis[..., 0] = ((angle + np.pi) / (2 * np.pi) * 255).astype(np.uint8)
+                flow_vis[..., 1] = (np.clip(magnitude / (magnitude.max() + 1e-8) * 255, 0, 255)).astype(np.uint8)
+                flow_vis[..., 2] = 255
+                Image.fromarray(flow_vis).save(self.run_dir / "motion" / f"flow_step{step:02d}.{self.config.format}")
+                print(f"  [Debug] Saved motion field: motion/flow_step{step:02d}.{self.config.format}")
+        except Exception as e:
+            print(f"  [Debug] Failed to save motion: {e}")
 
 
 @dataclass
@@ -48,6 +159,7 @@ class PipelineConfig:
     quality_max_retries: int = 2
     device: Optional[str] = None
     model_dir: Optional[Path] = None
+    debug: DebugConfig = field(default_factory=DebugConfig)
 
 
 @dataclass
@@ -89,6 +201,7 @@ class Pipeline:
         self.gpu_optimizer: Optional[GPUOptimizer] = None
         self.exporter: Optional[VideoExporter] = None
         
+        self.debug_saver: Optional[DebugSaver] = None
         self._initialized = False
     
     def _setup_device(self) -> torch.device:
@@ -120,6 +233,10 @@ class Pipeline:
         self.text_to_image = TextToImageGenerator(device=self.device)
         self.quality_controller = QualityController(device=self.device, max_retries=self.config.quality_max_retries)
         self.exporter = VideoExporter(device=self.device)
+        
+        if self.config.debug.enabled:
+            self.debug_saver = DebugSaver(self.config.debug)
+            print(f"[Debug] Debug output enabled: {self.debug_saver.run_dir}")
         
         self._initialized = True
         print("[Pipeline] All modules initialized")
@@ -242,6 +359,11 @@ class Pipeline:
         print(f"  Estimating depth map...")
         depth_result = self.depth_estimator.estimate(image)
         print(f"  Depth range: {depth_result.depth.min():.2f} - {depth_result.depth.max():.2f}")
+        
+        if self.debug_saver:
+            depth_tensor = depth_result.depth if hasattr(depth_result, 'depth') else depth_result.normalized
+            self.debug_saver.save_depth_map(depth_tensor, step=2)
+        
         return depth_result
     
     def _step3_segmentation(self, image: torch.Tensor) -> SegmentationResult:
@@ -251,6 +373,10 @@ class Pipeline:
         segmentation = self.segmentation.segment(image)
         print(f"  Detected: {segmentation.content_type.value}")
         print(f"  Categories: {segmentation.categories[:5]}...")
+        
+        if self.debug_saver:
+            self.debug_saver.save_segmentation(segmentation, step=3)
+        
         return segmentation
     
     def _step4_generate_motion(
@@ -278,6 +404,10 @@ class Pipeline:
             motion_prompt=self.config.motion_prompt
         )
         print(f"  Motion flows generated: {len(motion_field.flows)} frames")
+        
+        if self.debug_saver:
+            self.debug_saver.save_motion_field(motion_field, step=4)
+        
         return motion_field
     
     def _step5_video_diffusion(
@@ -309,6 +439,10 @@ class Pipeline:
         )
         
         print(f"  Generated {len(video_frames)} frames")
+        
+        if self.debug_saver:
+            self.debug_saver.save_frames(video_frames, "raw", step=5)
+        
         return video_frames
     
     def _step6_stabilize(
@@ -326,6 +460,10 @@ class Pipeline:
         print(f"  Applying temporal smoothing...")
         stabilized = self.stabilizer.stabilize(frames, motion_field=motion)
         print(f"  Stabilized {len(stabilized)} frames")
+        
+        if self.debug_saver:
+            self.debug_saver.save_frames(stabilized, "stabilized", step=6)
+        
         return stabilized
     
     def _step7_interpolate(self, frames: VideoFrames) -> VideoFrames:

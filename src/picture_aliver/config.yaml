@@ -194,6 +194,35 @@ remote:
   timeout: 300
 
 # =============================================================================
+# DEBUGGING SYSTEM
+# =============================================================================
+debug:
+  # Enable/disable debug output
+  enabled: false
+  
+  # Output directory for debug files
+  directory: "./debug"
+  
+  # Save intermediate data
+  save:
+    # Save depth maps
+    depth_maps: true
+    # Save segmentation masks
+    segmentation_masks: true
+    # Save raw generated frames
+    raw_frames: true
+    # Save stabilized frames
+    stabilized_frames: true
+    # Save motion fields
+    motion_fields: true
+  
+  # Format for saved images
+  format: "png"
+  
+  # Save every Nth frame (1 = all frames)
+  frame_interval: 1
+
+# =============================================================================
 # LOGGING
 # =============================================================================
 logging:

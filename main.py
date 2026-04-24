@@ -53,16 +53,33 @@ def config_to_pipeline_kwargs(config_dict: dict | None) -> dict:
     if config_dict is None:
         return {}
     
+    from src.picture_aliver.main import DebugConfig
+    
     pipeline_cfg = config_dict.get('pipeline', {})
     video_cfg = config_dict.get('video', {})
     gen_cfg = config_dict.get('generation', {})
     motion_cfg = config_dict.get('motion', {})
     output_cfg = config_dict.get('output', {})
     gpu_cfg = config_dict.get('gpu', {})
+    debug_cfg = config_dict.get('debug', {})
     
     device = gpu_cfg.get('device', None)
     if device == "auto":
         device = None
+    
+    save_cfg = debug_cfg.get('save', {})
+    
+    debug = DebugConfig(
+        enabled=debug_cfg.get('enabled', False),
+        directory=debug_cfg.get('directory', './debug'),
+        save_depth_maps=save_cfg.get('depth_maps', True),
+        save_segmentation_masks=save_cfg.get('segmentation_masks', True),
+        save_raw_frames=save_cfg.get('raw_frames', True),
+        save_stabilized_frames=save_cfg.get('stabilized_frames', True),
+        save_motion_fields=save_cfg.get('motion_fields', True),
+        format=debug_cfg.get('format', 'png'),
+        frame_interval=debug_cfg.get('frame_interval', 1),
+    )
     
     return {
         'duration_seconds': video_cfg.get('duration_seconds', 3.0),
@@ -82,6 +99,7 @@ def config_to_pipeline_kwargs(config_dict: dict | None) -> dict:
         'quality_max_retries': pipeline_cfg.get('quality_max_retries', 2),
         'device': device,
         'model_dir': None,
+        'debug': debug,
     }
 
 
