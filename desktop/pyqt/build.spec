@@ -29,14 +29,31 @@ if src_dir.exists():
         if "__pycache__" not in str(py_file):
             src_modules.append((str(py_file), "src"))
 
+# Import PyInstaller utilities for collecting binaries
+from PyInstaller.utils.hooks import collect_all, collect_submodules
+
+# Collect all torch and torchvision data including DLLs
+torch_datas, torch_binaries = collect_all('torch')
+torchvision_datas, torchvision_binaries = collect_all('torchvision')
+
+# Collect PyTorch extensions binaries (includes CUDA DLLs)
+try:
+    from PyInstaller.utils.hooks import collect_data_files
+    torch_c_datas = collect_data_files('torch._C')
+except:
+    torch_c_datas = []
+
+all_binaries = torch_binaries + torchvision_binaries
+all_datas = torch_datas + torchvision_datas + torch_c_datas
+
 a = Analysis(
     [str(SCRIPT_PATH)],
     pathex=[
         str(PROJECT_ROOT),
         str(PROJECT_ROOT / "src"),
     ],
-    binaries=[],
-    datas=[
+    binaries=all_binaries,
+    datas=all_datas + [
         (str(PROJECT_ROOT / "configs"), "configs"),
         (str(PROJECT_ROOT / "src/picture_aliver/config.yaml"), "src/picture_aliver"),
         (str(PROJECT_ROOT / "src/utils"), "src/utils"),
@@ -52,6 +69,9 @@ a = Analysis(
         # PyTorch
         "torch",
         "torchvision",
+        "torch.nn",
+        "torch.nn.functional",
+        "torch._C",
         # FastAPI
         "uvicorn",
         "uvicorn.logging",
@@ -75,6 +95,7 @@ a = Analysis(
         "src.picture_aliver.quality_control",
         "src.picture_aliver.exporter",
         "src.picture_aliver.model_manager",
+        "src.picture_aliver.model_manager_extended",
         # Core modules
         "src.core.pipeline",
         "src.core.model_registry",

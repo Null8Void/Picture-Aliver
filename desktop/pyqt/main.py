@@ -1028,53 +1028,80 @@ class MainWindow(QMainWindow):
         
         logger.info("[Model Discovery] Scanning for available models...")
         
+        # Model types supported by the application
+        all_models = [
+            ("wan21", "Wan 2.1 (High Quality)"),
+            ("wan22", "Wan 2.2 (Latest)"),
+            ("lightx2v", "LightX2V (Fast)"),
+            ("hunyuan", "HunyuanVideo"),
+            ("ltx", "LTX-Video"),
+            ("cogvideo", "CogVideo"),
+            ("longcat", "LongCat-Video"),
+            ("legacy", "Legacy Pipeline"),
+        ]
+        
+        # Check each model for availability
+        for model_id, model_name in all_models:
+            if self._check_model_available(model_id):
+                available.append((model_id, model_name))
+                logger.info(f"[Model Discovery] Available: {model_name}")
+        
+        # If no models available, provide all as options (they may work at runtime)
+        if not available:
+            logger.warning("[Model Discovery] No models detected, adding all model types")
+            available = all_models
+        
+        logger.info(f"[Model Discovery] Total models available: {len(available)}")
+        return available
+    
+    def _check_model_available(self, model_type: str) -> bool:
+        """Check if a specific model type is available."""
         try:
-            # Check Wan 2.1
-            try:
-                from diffusers import WanImageToVideoPipeline
-                available.append(("wan21", "Wan 2.1 (High Quality)"))
-                logger.info("[Model Discovery] Found: Wan 2.1")
-            except ImportError:
-                pass
+            if model_type == "legacy":
+                # Legacy pipeline check - requires basic imports
+                from src.picture_aliver.main import Pipeline
+                return True
             
-            # Check Wan 2.2
-            try:
-                from diffusers import WanImageToVideoPipeline
-                available.append(("wan22", "Wan 2.2 (Latest)"))
-                logger.info("[Model Discovery] Found: Wan 2.2")
-            except ImportError:
-                pass
+            # Check diffusers-based models
+            if model_type in ("wan21", "wan22"):
+                try:
+                    from diffusers import WanImageToVideoPipeline
+                    return True
+                except ImportError:
+                    pass
             
             # Check LightX2V
-            try:
-                from lightx2v import LightX2VPipeline
-                available.append(("lightx2v", "LightX2V (Fast)"))
-                logger.info("[Model Discovery] Found: LightX2V")
-            except ImportError:
-                pass
+            if model_type == "lightx2v":
+                try:
+                    from lightx2v import LightX2VPipeline
+                    return True
+                except ImportError:
+                    pass
             
-            # Check Legacy (always available if imports work)
-            try:
-                from src.picture_aliver.main import Pipeline
-                available.append(("legacy", "Legacy Pipeline"))
-                logger.info("[Model Discovery] Found: Legacy Pipeline")
-            except ImportError:
-                pass
+            # Check HunyuanVideo
+            if model_type == "hunyuan":
+                try:
+                    from diffusers import HunyuanVideoPipeline
+                    return True
+                except ImportError:
+                    pass
+            
+            # Check LTX-Video
+            if model_type == "ltx":
+                try:
+                    from diffusers import LTXVideoPipeline
+                    return True
+                except ImportError:
+                    pass
+            
+            # CogVideo, LongCat don't need specific imports check
+            if model_type in ("cogvideo", "longcat"):
+                return True
             
         except Exception as e:
-            logger.warning(f"[Model Discovery] Scan error: {e}")
+            logger.debug(f"[Model Discovery] {model_type} check failed: {e}")
         
-        # Fallback defaults if nothing detected
-        if not available:
-            logger.warning("[Model Discovery] No models detected, using defaults")
-            available = [
-                ("wan21", "Wan 2.1 (High Quality)"),
-                ("lightx2v", "LightX2V (Fast)"),
-                ("legacy", "Legacy Pipeline"),
-            ]
-        
-        logger.info(f"[Model Discovery] Total models found: {len(available)}")
-        return available
+        return False
     
     def refresh_model_list(self):
         """Refresh the model dropdown with available models."""
