@@ -1,314 +1,289 @@
-# Picture-Aliver - Running the Full Stack
+# Picture-Aliver - Running Instructions
 
-Complete instructions for running both the backend server and mobile app.
+Complete guide to running the Picture-Aliver application on all supported platforms.
 
 ---
 
-## Part 1: Backend Server (PC)
+## Quick Start Commands
 
-### Prerequisites
-- Python 3.9+
-- GPU recommended (2GB+ VRAM for minimum)
-- pip installed
-
-### Setup
-
+### PyQt5 Desktop App
 ```bash
-# Navigate to project
-cd E:/Picture-Aliver
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Verify Python environment
-python --version
-python -c "import torch; print(f'PyTorch {torch.__version__}')"
+python desktop/pyqt/main.py
 ```
 
-### Starting the Server
+### Electron Desktop App
+```bash
+cd desktop/electron
+npm start
+```
 
-**Option A: Quick Start (Default settings)**
+### Mobile App (React Native/Expo)
+```bash
+cd mobile_app
+npm start
+```
+
+### API Server Only
 ```bash
 python -m uvicorn src.picture_aliver.api:app --host 0.0.0.0 --port 8000
 ```
 
-**Option B: Development mode (auto-reload)**
+---
+
+## Platform Details
+
+### PyQt5 Desktop App
+
+The PyQt5 desktop application provides a full GUI for image-to-video generation with:
+- Image selection and preview
+- Prompt input
+- Video settings (duration, FPS, resolution)
+- Generation progress
+- Video playback
+
+#### Prerequisites
 ```bash
-uvicorn src.picture_aliver.api:app --reload --host 0.0.0.0 --port 8000
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Install PyQt5 dependencies  
+cd desktop/pyqt
+pip install -r requirements.txt
 ```
 
-**Option C: Custom port**
+#### Running
 ```bash
-uvicorn src.picture_aliver.api:app --host 0.0.0.0 --port 8080
+# From project root
+python desktop/pyqt/main.py
+
+# Or with validation first
+python -c "from src.picture_aliver.validate import validate_early"
+python desktop/pyqt/main.py
 ```
 
-### Verify Server is Running
-
+#### Building Executable
 ```bash
-# Health check (in another terminal)
-curl http://localhost:8000/health
-
-# Should return JSON like:
-# {"status": "healthy", "gpu": {...}}
+cd desktop/pyqt
+pyinstaller build.spec --noconfirm
 ```
 
-### Server Logs
-
-Expected startup output:
-```
-INFO:     Uvicorn running on http://0.0.0.0:8000
-INFO:     Application startup complete.
-```
+Output: `dist/Picture-Aliver/Picture-Aliver.exe`
 
 ---
 
-## Part 2: Mobile App
+### Electron Desktop App
 
-### Prerequisites
-- Node.js 18+
-- npm or yarn
-- Expo CLI: `npm install -g expo-cli`
-- Android Studio (for Android) OR Xcode (for iOS)
+The Electron app provides a web-based UI with a local backend server.
 
-### Setup
-
+#### Prerequisites
 ```bash
-# Navigate to mobile app
-cd E:/Picture-Aliver/mobile_app
-
-# Install dependencies
+# Install Node dependencies
+cd desktop/electron
 npm install
 ```
 
-### Configuration
-
-Edit `lib/services/api.ts` to set your server IP:
-
-```typescript
-// Find this section and update with your PC's IP address
-export const API_CONFIG = {
-  DEFAULT_URLS: {
-    // For Android Emulator: use 10.0.2.2
-    android: 'http://10.0.2.2:8000',
-    
-    // For iOS Simulator: use localhost
-    ios: 'http://localhost:8000',
-    
-    // For Physical Device: use your PC's local IP
-    physical: 'http://192.168.1.100:8000',  // <-- UPDATE THIS
-  },
-  // ...
-};
-```
-
-**Finding your PC's IP:**
-
-Windows:
-```cmd
-ipconfig | findstr "IPv4"
-```
-
-Mac/Linux:
+#### Running
 ```bash
-ifconfig | grep "inet "
-```
-
-### Run on Device
-
-**Android Emulator:**
-```bash
-npm run android
-# Or: npx expo run:android
-```
-
-**iOS Simulator:**
-```bash
-npm run ios
-# Or: npx expo run:ios
-```
-
-**Physical Device (requires same WiFi):**
-
-1. Start Metro bundler:
-```bash
+cd desktop/electron
 npm start
 ```
 
-2. Open Expo Go app on your phone
+This will:
+1. Start the FastAPI backend server on port 8000
+2. Launch the Electron application window
 
-3. Scan the QR code shown in terminal
+#### Building
+```bash
+cd desktop/electron
+npm run build:win    # Windows
+npm run build:mac   # macOS
+npm run build:linux # Linux
+```
 
-### Mobile App Screens
-
-1. **Home Screen**
-   - Tap to select image (gallery/camera)
-   - Enter prompt text
-   - Adjust duration/FPS
-   - Tap "Generate Video"
-   - Watch progress
-   - Preview result
-
-2. **Settings Screen**
-   - Configure API URL
-   - Test connection
-   - View server status
+Output: `desktop/electron/release/`
 
 ---
 
-## Part 3: Testing the Full Stack
+### Mobile App
 
-### Test 1: API Health Check
+The React Native/Expo mobile app for Android and iOS.
 
+#### Prerequisites
 ```bash
-# From PC terminal
+# Install Node dependencies
+cd mobile_app
+npm install
+
+# Install Expo CLI (if needed)
+npm install -g expo-cli
+```
+
+#### Running
+
+**Development Server:**
+```bash
+cd mobile_app
+npm start
+```
+
+**Android (Emulator):**
+```bash
+cd mobile_app
+npm run android
+```
+
+**iOS (Simulator):**
+```bash
+cd mobile_app
+npm run ios
+```
+
+**Physical Device:**
+1. Ensure phone and computer on same WiFi
+2. Update API URL in `mobile_app/lib/services/api.ts`:
+   ```typescript
+   physical: 'http://YOUR_PC_IP:8000'
+   ```
+3. Run `npm start`
+4. Scan QR code with Expo Go app
+
+#### Building APK
+```bash
+cd mobile_app
+npm run prebuild:android
+cd android && ./gradlew assembleRelease
+```
+
+---
+
+## API Server
+
+The backend API can run standalone for integration with other clients.
+
+#### Running
+```bash
+# Default (all interfaces, port 8000)
+python -m uvicorn src.picture_aliver.api:app --host 0.0.0.0 --port 8000
+
+# Development with auto-reload
+python -m uvicorn src.picture_aliver.api:app --reload --host 0.0.0.0 --port 8000
+
+# Custom port
+python -m uvicorn src.picture_aliver.api:app --port 8080
+```
+
+#### Health Check
+```bash
 curl http://localhost:8000/health
 ```
 
-### Test 2: Generate via API
-
+#### Generate Video
 ```bash
-# Prepare test image
-curl -o test.png "https://picsum.photos/512/512"
-
-# Generate video
 curl -X POST http://localhost:8000/generate \
-  -F "image=@test.png" \
+  -F "image=@your_image.jpg" \
   -F "prompt=gentle wave animation" \
   -F "duration=3" \
   -F "fps=8"
-
-# Response:
-# {"task_id":"abc12345","status":"pending","message":"..."}
 ```
 
-### Test 3: Check Task Status
-
+#### Check Task Status
 ```bash
-# Replace TASK_ID with actual ID from previous step
-curl http://localhost:8000/tasks/TASK_ID
+curl http://localhost:8000/tasks/YOUR_TASK_ID
 ```
 
-### Test 4: Download Video
-
+#### Download Video
 ```bash
-# Replace TASK_ID
-curl -O http://localhost:8000/download/TASK_ID -o output.mp4
+curl -O http://localhost:8000/download/YOUR_TASK_ID
 ```
 
 ---
 
-## Part 4: Running the Testing Workflow
+## Environment Setup
 
-### Run All Tests
-
+### Virtual Environment (Recommended)
 ```bash
-cd E:/Picture-Aliver
-python -m tests.testing_workflow
+# Create
+python -m venv venv
+
+# Activate (Windows)
+venv\Scripts\activate
+
+# Activate (Mac/Linux)
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-### Expected Output
+### GPU Setup
 
+**CUDA (NVIDIA):**
+```bash
+# Install PyTorch with CUDA
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+
+# Verify
+python -c "import torch; print(torch.cuda.is_available())"
 ```
-======================================================================
-PICTURE-ALIVER TESTING WORKFLOW
-======================================================================
 
-14:32:01 | INFO     | TEST: portrait_subtle_motion
-14:32:01 | INFO     | [IMAGE_LOAD] Starting...
-14:32:01 | INFO     | [IMAGE_LOAD] Loaded: tests/images/portrait.png
-14:32:02 | INFO     | [VIDEO_DIFF] Initializing pipeline...
-14:32:45 | INFO     | [VERIFICATION] Analyzing...
-14:32:46 | INFO     | [Metrics] Motion: 2.15 intensity
-14:32:46 | INFO     | [PASS] portrait_subtle_motion (45.2s)
-
-14:32:48 | INFO     | TEST: landscape_pan
-...
-14:32:98 | INFO     | [PASS] landscape_pan (52.1s)
-
-14:33:00 | INFO     | TEST: object_rotation
-...
-14:33:45 | INFO     | [PASS] object_rotation (45.8s)
-
-======================================================================
-TEST SUMMARY
-======================================================================
-Total: 3 | Passed: 3 | Failed: 0
-======================================================================
+**ROCm (AMD):**
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm
 ```
+
+### Environment Variables
+```bash
+# GPU selection
+export CUDA_VISIBLE_DEVICES=0
+
+# Memory optimization
+export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+
+# Model cache
+export HF_HOME=./models/cache
+export TRANSFORMERS_CACHE=./models/cache/transformers
+```
+
+---
+
+## Validation
+
+Run startup validation to check for issues:
+```bash
+python -c "from src.picture_aliver.validate import validate_early; validate_early()"
+```
+
+This checks:
+- Python version (3.9+)
+- Required dependencies
+- Directory structure
+- GPU availability
+- Pipeline imports
 
 ---
 
 ## Troubleshooting
 
-### Server Issues
-
-| Problem | Solution |
-|---------|----------|
-| "Address already in use" | Change port: `--port 8080` |
+| Issue | Solution |
+|-------|----------|
 | "Module not found" | Run `pip install -r requirements.txt` |
-| GPU not detected | Check CUDA: `python -c "import torch; print(torch.cuda.is_available())"` |
-
-### Mobile App Issues
-
-| Problem | Solution |
-|---------|----------|
-| "Connection refused" | Verify server is running, check IP address |
-| "Network Error" | Ensure phone and PC on same WiFi |
-| App won't load | Run `npm start`, check Metro bundler |
-| Image upload fails | Check file size < 10MB |
-
-### Network Setup (Physical Device)
-
-1. Disable firewall for port 8000:
-   ```bash
-   # Windows (Admin)
-   netsh advfirewall firewall add rule name="PictureAliver" dir=in action=allow port=8000
-   ```
-
-2. Or add exception in Windows Firewall
-
-3. Verify connection:
-   ```bash
-   # From phone's browser
-   http://192.168.1.100:8000/health
-   ```
+| Import errors | Validate with `python -c "from src.picture_aliver.validate import validate_early"` |
+| GPU not detected | Install CUDA version of PyTorch |
+| Port in use | Use `--port 8080` or `--port 8001` |
+| Electron not starting | Run `npm install` in `desktop/electron/` |
+| Mobile app can't connect | Update IP in `mobile_app/lib/services/api.ts` |
+| Image loading fails | Check file format (PNG, JPG, WEBP supported) |
+| Out of memory | Reduce resolution or FPS |
 
 ---
 
-## Quick Reference
+## Common Commands Reference
 
 | Command | Description |
 |---------|-------------|
-| `python -m uvicorn src.picture_aliver.api:app --host 0.0.0.0 --port 8000` | Start server |
-| `python -m tests.testing_workflow` | Run tests |
-| `npm start` | Start mobile dev server |
-| `curl http://localhost:8000/health` | Health check |
-
----
-
-## Architecture Overview
-
-```
-┌─────────────────┐     HTTP      ┌──────────────────┐
-│   Mobile App    │ ─────────────▶│  FastAPI Server  │
-│  (Expo/React)   │  POST /generate│  (Uvicorn)       │
-└─────────────────┘               └────────┬─────────┘
-                                          │
-                    ┌─────────────────────┼─────────────────────┐
-                    │                     │                     │
-              ┌─────▼─────┐        ┌─────▼─────┐        ┌─────▼─────┐
-              │  Pipeline │        │   GPU     │        │  Output   │
-              │  Stages   │───────▶│ Optimizer │───────▶│  Videos   │
-              └───────────┘        └───────────┘        └───────────┘
-```
-
-## File Locations
-
-| Component | Path |
-|-----------|------|
-| Backend API | `src/picture_aliver/api.py` |
-| Pipeline | `src/picture_aliver/main.py` |
-| Mobile App | `mobile_app/` |
-| Tests | `tests/` |
-| Outputs | `outputs/` |
-| Debug | `debug/` |
+| `python desktop/pyqt/main.py` | Run PyQt5 app |
+| `python -m uvicorn src.picture_aliver.api:app` | Run API server |
+| `cd desktop/electron && npm start` | Run Electron app |
+| `cd mobile_app && npm start` | Run mobile dev server |
+| `python -m tests.testing_workflow` | Run test suite |
+| `pip install -r requirements.txt` | Install dependencies |

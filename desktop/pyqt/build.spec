@@ -17,8 +17,8 @@ from pathlib import Path
 
 block_cipher = None
 
-# Project root directory - use absolute path
-project_root = Path("E:/Picture-Aliver")
+# Project root directory - dynamically resolve
+project_root = Path(SPECPATH).parent.parent.parent.resolve()
 
 a = Analysis(
     ['desktop/pyqt/main.py'],

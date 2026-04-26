@@ -20,6 +20,11 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
+# Add project root to path
+_project_root = Path(__file__).parent.parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QTextEdit, QLineEdit, QSlider, QProgressBar,
@@ -112,11 +117,11 @@ class GenerationWorker(QThread):
     finished = pyqtSignal(bool, str, str)  # success, message, video_path
     log_message = pyqtSignal(str)  # log line
     
-    def __init__(self, image_path: str, params: dict, local_backend: LocalBackend):
+    def __init__(self, image_path: str, params: dict, use_unified_model: bool = True):
         super().__init__()
         self.image_path = image_path
         self.params = params
-        self.backend = local_backend
+        self.use_unified_model = use_unified_model
         self._running = True
         
     def run(self):
@@ -125,10 +130,71 @@ class GenerationWorker(QThread):
             self.log_message.emit("[Worker] Starting generation...")
             self.progress.emit("Initializing pipeline...", 5)
             
-            # Import pipeline components
-            from src.picture_aliver.main import (
-                Pipeline, PipelineConfig, DebugConfig
+            if self.use_unified_model:
+                # Use new unified model interface
+                self._run_unified()
+            else:
+                # Use legacy pipeline
+                self._run_legacy()
+                
+        except Exception as e:
+            self.log_message.emit(f"[Worker] Error: {e}")
+            self.finished.emit(False, str(e), "")
+    
+    def _run_unified(self):
+        """Run using unified model interface."""
+        try:
+            from src.picture_aliver.model_manager import ModelManager
+            
+            self.progress.emit("Loading model...", 10)
+            self.log_message.emit("[Worker] Loading model with fallback support...")
+            
+            # Create manager with fallback
+            manager = ModelManager(
+                primary="wan21",
+                fallback="legacy"
             )
+            
+            self.progress.emit("Generating video...", 30)
+            self.log_message.emit("[Worker] Starting video generation...")
+            
+            # Generate
+            result = manager.generate(
+                image=self.image_path,
+                prompt=self.params.get('prompt', ''),
+                negative_prompt=self.params.get('negative_prompt', ''),
+                duration=self.params.get('duration', 3.0),
+                fps=self.params.get('fps', 8),
+                width=self.params.get('width', 512),
+                height=self.params.get('height', 512),
+            )
+            
+            if result["success"]:
+                self.progress.emit("Complete!", 100)
+                self.log_message.emit(f"[Worker] Success! Video: {result['video_path']}")
+                self.log_message.emit(f"[Worker] Model: {result['model_type']}, Time: {result['generation_time']:.1f}s")
+                self.finished.emit(True, "Video generated successfully!", result["video_path"])
+            else:
+                error = result.get("error", "Unknown error")
+                self.log_message.emit(f"[Worker] Failed: {error}")
+                self.finished.emit(False, f"Generation failed: {error}", "")
+                
+        except ImportError as e:
+            self.log_message.emit(f"[Worker] Using legacy mode (unified model unavailable): {e}")
+            self._run_legacy()
+        except Exception as e:
+            self.log_message.emit(f"[Worker] Unified model error: {e}, falling back to legacy")
+            try:
+                self._run_legacy()
+            except Exception as e2:
+                self.log_message.emit(f"[Worker] Legacy failed too: {e2}")
+                self.finished.emit(False, str(e2), "")
+    
+    def _run_legacy(self):
+        """Run using legacy pipeline."""
+        from src.picture_aliver.main import (
+            Pipeline, PipelineConfig, DebugConfig
+        )
             
             # Create config
             config = PipelineConfig(
@@ -173,10 +239,6 @@ class GenerationWorker(QThread):
                 errors = "; ".join(result.errors) if result.errors else "Unknown error"
                 self.log_message.emit(f"[Worker] Failed: {errors}")
                 self.finished.emit(False, f"Generation failed: {errors}", "")
-                
-        except Exception as e:
-            self.log_message.emit(f"[Worker] Error: {e}")
-            self.finished.emit(False, str(e), "")
     
     def stop(self):
         """Request worker to stop."""
@@ -193,8 +255,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.worker: Optional[GenerationWorker] = None
-        self.local_backend = LocalBackend()
         self.selected_image_path: Optional[str] = None
+        self._use_unified_model = True
         
         self.init_ui()
         self.setup_signals()
@@ -494,8 +556,8 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("Generating...")
         self.log(f"Starting generation with: {params}")
         
-        # Start worker thread
-        self.worker = GenerationWorker(self.selected_image_path, params, self.local_backend)
+        # Start worker thread with unified model
+        self.worker = GenerationWorker(self.selected_image_path, params, self._use_unified_model)
         self.worker.progress.connect(self.on_progress)
         self.worker.finished.connect(self.on_finished)
         self.worker.log_message.connect(self.log)
@@ -591,7 +653,6 @@ class MainWindow(QMainWindow):
         """Handle window close."""
         if self.worker and self.worker.isRunning():
             self.worker.terminate()
-        self.local_backend.stop()
         event.accept()
 
 

@@ -28,8 +28,14 @@ from .gpu_optimization import (
     optimize_model_for_device, print_benchmark_table
 )
 from .main import Pipeline, PipelineConfig, PipelineResult, run_pipeline
+from .models import VideoModel, ModelType, GenerationResult, create_model, validate_model
+from .models_extended import VideoModel as VideoModelExtended
+from .model_manager import ModelManager, generate_video
+from .model_manager_extended import ModelManager as ExtendedModelManager, list_models
+from .cli import main as cli_main
 
 __all__ = [
+    # Core pipeline
     "ImageLoader",
     "DepthEstimator",
     "DepthResult",
@@ -72,4 +78,18 @@ __all__ = [
     "PipelineConfig",
     "PipelineResult",
     "run_pipeline",
+    # Model Interface (Basic)
+    "VideoModel",
+    "ModelType",
+    "GenerationResult",
+    "create_model",
+    "validate_model",
+    "ModelManager",
+    "generate_video",
+    # Model Interface (Extended)
+    "VideoModelExtended",
+    "ExtendedModelManager",
+    "list_models",
+    # CLI
+    "cli_main",
 ]
