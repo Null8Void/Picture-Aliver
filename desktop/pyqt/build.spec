@@ -36,9 +36,11 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules, collect_dat
 torch_all = collect_all('torch')
 torchvision_all = collect_all('torchvision')
 
-# collect_all returns (datas, binaries, zipfiles, remote_ui) - we need datas
+# collect_all returns (datas, binaries, zipfiles, remote_ui) - we need both datas AND binaries
 torch_datas = torch_all[0] if torch_all else []
+torch_binaries = torch_all[1] if len(torch_all) > 1 else []
 torchvision_datas = torchvision_all[0] if torchvision_all else []
+torchvision_binaries = torchvision_all[1] if len(torchvision_all) > 1 else []
 
 # Collect PyTorch extensions binaries (includes CUDA DLLs)
 try:
@@ -49,15 +51,18 @@ except:
 # Collect numpy and other critical binaries
 numpy_all = collect_all('numpy')
 numpy_datas = numpy_all[0] if numpy_all else []
+numpy_binaries = numpy_all[1] if len(numpy_all) > 1 else []
 
-# Combine all datas
+# Combine all datas AND binaries - IMPORTANT for PyTorch DLLs
 all_datas = list(torch_datas) + list(torchvision_datas) + list(torch_c_datas) + list(numpy_datas) + [
     (str(PROJECT_ROOT / "configs"), "configs"),
-    (str(PROJECT_ROOT / "src/picture_aliver/config.yaml"), "src/picture_aliver"),
+    (str(PROJECT_ROOT / "src/picture_aliver"), "src/picture_aliver"),
     (str(PROJECT_ROOT / "src/utils"), "src/utils"),
     (str(PROJECT_ROOT / "src/core"), "src/core"),
     (str(PROJECT_ROOT / "src/modules"), "src/modules"),
 ]
+
+all_binaries = list(torch_binaries) + list(torchvision_binaries) + list(numpy_binaries)
 
 a = Analysis(
     [str(SCRIPT_PATH)],
@@ -65,7 +70,7 @@ a = Analysis(
         str(PROJECT_ROOT),
         str(PROJECT_ROOT / "src"),
     ],
-    binaries=[],
+    binaries=all_binaries,
     datas=all_datas,
     hiddenimports=[
         # PyQt5
