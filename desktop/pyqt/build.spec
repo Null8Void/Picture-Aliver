@@ -21,14 +21,27 @@ block_cipher = None
 PROJECT_ROOT = Path("D:/Git/Picture-Aliver")
 SCRIPT_PATH = PROJECT_ROOT / "desktop" / "pyqt" / "main.py"
 
+# Collect all src modules
+src_modules = []
+src_dir = PROJECT_ROOT / "src"
+if src_dir.exists():
+    for py_file in src_dir.rglob("*.py"):
+        if "__pycache__" not in str(py_file):
+            src_modules.append((str(py_file), "src"))
+
 a = Analysis(
     [str(SCRIPT_PATH)],
-    pathex=[str(PROJECT_ROOT)],
+    pathex=[
+        str(PROJECT_ROOT),
+        str(PROJECT_ROOT / "src"),
+    ],
     binaries=[],
     datas=[
-        (str(PROJECT_ROOT / "configs/default.yaml"), "configs"),
-        (str(PROJECT_ROOT / "configs/model_config.yaml"), "configs"),
+        (str(PROJECT_ROOT / "configs"), "configs"),
         (str(PROJECT_ROOT / "src/picture_aliver/config.yaml"), "src/picture_aliver"),
+        (str(PROJECT_ROOT / "src/utils"), "src/utils"),
+        (str(PROJECT_ROOT / "src/core"), "src/core"),
+        (str(PROJECT_ROOT / "src/modules"), "src/modules"),
     ],
     hiddenimports=[
         # PyQt5
@@ -47,11 +60,39 @@ a = Analysis(
         "starlette",
         "pydantic",
         "python_multipart",
-        # Pipeline
+        # Pipeline modules
         "src.picture_aliver.main",
         "src.picture_aliver.api",
         "src.picture_aliver.config",
         "src.picture_aliver.gpu_optimization",
+        "src.picture_aliver.image_loader",
+        "src.picture_aliver.depth_estimator",
+        "src.picture_aliver.segmentation",
+        "src.picture_aliver.motion_generator",
+        "src.picture_aliver.video_generator",
+        "src.picture_aliver.stabilizer",
+        "src.picture_aliver.text_to_image",
+        "src.picture_aliver.quality_control",
+        "src.picture_aliver.exporter",
+        "src.picture_aliver.model_manager",
+        # Core modules
+        "src.core.pipeline",
+        "src.core.model_registry",
+        "src.core.model_loader",
+        "src.core.device",
+        "src.core.config",
+        "src.core.config_extension",
+        # Utils
+        "src.utils.logger",
+        "src.utils.image_utils",
+        "src.utils.video_utils",
+        # Modules
+        "src.modules.generation.video_generator",
+        "src.modules.generation.depth_conditioning",
+        "src.modules.motion.motion_injector",
+        "src.modules.motion.camera_motion",
+        "src.modules.depth.depth_estimator",
+        "src.modules.segmentation.segmentor",
     ],
     hookspath=[],
     hooksconfig={},

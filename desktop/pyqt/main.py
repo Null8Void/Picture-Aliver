@@ -20,10 +20,20 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
-# Add project root to path
+# Add project root to path for both development and PyInstaller
 _project_root = Path(__file__).parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
+
+# Handle PyInstaller bundled executable
+if getattr(sys, 'frozen', False):
+    _bundle_dir = Path(sys._MEIPASS) if hasattr(sys, '_MEIPASS') else Path(sys.executable).parent
+    if str(_bundle_dir) not in sys.path:
+        sys.path.insert(0, str(_bundle_dir))
+    # Add src module path for bundled app
+    _src_path = _bundle_dir / "src"
+    if str(_src_path) not in sys.path:
+        sys.path.insert(0, str(_src_path))
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -190,51 +200,49 @@ class GenerationWorker(QThread):
                 self.log_message.emit(f"[Worker] Legacy failed too: {e2}")
                 self.finished.emit(False, str(e2), "")
     
-def _run_legacy(self):
-    """Run using legacy pipeline."""
-    from src.picture_aliver.main import Pipeline, PipelineConfig, DebugConfig
-    config = PipelineConfig(
-        duration_seconds=self.params.get('duration', 3.0),
-        fps=self.params.get('fps', 8),
-        width=self.params.get('width', 512),
-        height=self.params.get('height', 512),
-        guidance_scale=self.params.get('guidance_scale', 7.5),
-        motion_strength=self.params.get('motion_strength', 0.8),
-        motion_mode=self.params.get('motion_mode', 'auto'),
-        enable_quality_check=self.params.get('enable_quality_check', True),
-        enable_stabilization=True,
-        debug=DebugConfig(enabled=False)
-    )
-    
-    self.progress.emit("Loading models...", 15)
-    pipeline = Pipeline(config)
-    pipeline.initialize()
-    
-    self.progress.emit("Running image-to-video generation...", 30)
-    self.log_message.emit("[Worker] Pipeline initialized, starting generation...")
-    
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = Path("outputs")
-    output_dir.mkdir(exist_ok=True)
-    output_path = output_dir / f"video_{timestamp}.mp4"
-    
-    result = pipeline.run_pipeline(
-        image_path=self.image_path,
-        prompt=self.params.get('prompt', ''),
-        config=config,
-        output_path=output_path
-    )
-    
-    if result.success:
-        self.progress.emit("Complete!", 100)
-        self.log_message.emit("[Worker] Success! Video saved to " + str(result.output_path))
-        self.finished.emit(True, "Video generated successfully!", str(result.output_path))
-    else:
-        errors = "; ".join(result.errors) if result.errors else "Unknown error"
-        self.log_message.emit("[Worker] Failed: " + errors)
-        self.finished.emit(False, "Generation failed: " + errors, "")
-        """Request worker to stop."""
-        self._running = False
+    def _run_legacy(self):
+        """Run using legacy pipeline."""
+        from src.picture_aliver.main import Pipeline, PipelineConfig, DebugConfig
+        config = PipelineConfig(
+            duration_seconds=self.params.get('duration', 3.0),
+            fps=self.params.get('fps', 8),
+            width=self.params.get('width', 512),
+            height=self.params.get('height', 512),
+            guidance_scale=self.params.get('guidance_scale', 7.5),
+            motion_strength=self.params.get('motion_strength', 0.8),
+            motion_mode=self.params.get('motion_mode', 'auto'),
+            enable_quality_check=self.params.get('enable_quality_check', True),
+            enable_stabilization=True,
+            debug=DebugConfig(enabled=False)
+        )
+        
+        self.progress.emit("Loading models...", 15)
+        pipeline = Pipeline(config)
+        pipeline.initialize()
+        
+        self.progress.emit("Running image-to-video generation...", 30)
+        self.log_message.emit("[Worker] Pipeline initialized, starting generation...")
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = Path("outputs")
+        output_dir.mkdir(exist_ok=True)
+        output_path = output_dir / f"video_{timestamp}.mp4"
+        
+        result = pipeline.run_pipeline(
+            image_path=self.image_path,
+            prompt=self.params.get('prompt', ''),
+            config=config,
+            output_path=output_path
+        )
+        
+        if result.success:
+            self.progress.emit("Complete!", 100)
+            self.log_message.emit("[Worker] Success! Video saved to " + str(result.output_path))
+            self.finished.emit(True, "Video generated successfully!", str(result.output_path))
+        else:
+            errors = "; ".join(result.errors) if result.errors else "Unknown error"
+            self.log_message.emit("[Worker] Failed: " + errors)
+            self.finished.emit(False, "Generation failed: " + errors, "")
 
 
 # =============================================================================
@@ -303,10 +311,37 @@ class MainWindow(QMainWindow):
         self.create_toolbar()
     
     def create_input_panel(self) -> QWidget:
-        """Create the left input panel."""
+        """Create the left input panel with scroll support."""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollArea > QWidget > QWidget {
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                width: 10px;
+                background: #f1f1f1;
+            }
+            QScrollBar::handle:vertical {
+                background: #c1c1c1;
+                border-radius: 5px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #a1a1a1;
+            }
+        """)
+        
         panel = QWidget()
+        panel.setStyleSheet("background: transparent;")
         layout = QVBoxLayout(panel)
         layout.setSpacing(15)
+        layout.setContentsMargins(10, 10, 10, 10)
         
         # Title with logo
         title_layout = QHBoxLayout()
@@ -406,12 +441,6 @@ class MainWindow(QMainWindow):
         model_select_layout = QHBoxLayout()
         model_select_layout.addWidget(QLabel("Model:"))
         self.model_combo = QComboBox()
-        self.model_combo.addItems([
-            "Auto (Best Available)",
-            "Wan 2.1 (High Quality)",
-            "LightX2V (Fast)",
-            "Legacy Pipeline"
-        ])
         self.model_combo.setStyleSheet("""
             QComboBox {
                 padding: 8px;
@@ -423,10 +452,30 @@ class MainWindow(QMainWindow):
         model_select_layout.addStretch()
         model_layout.addLayout(model_select_layout)
         
+        # Add default items initially, will be refreshed on startup
+        self.model_combo.addItems([
+            "Loading models...",
+        ])
+        
         # Model info
         self.model_info = QLabel("VRAM: Checking...")
         self.model_info.setStyleSheet("color: #6c757d; font-size: 11px;")
         model_layout.addWidget(self.model_info)
+        
+        # Refresh button
+        refresh_btn = QPushButton("🔄 Refresh Models")
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f3f4f6;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-size: 11px;
+            }
+            QPushButton:hover { background-color: #e5e7eb; }
+        """)
+        refresh_btn.clicked.connect(self.refresh_model_list)
+        model_layout.addWidget(refresh_btn)
         
         layout.addWidget(model_group)
         
@@ -532,7 +581,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.generate_btn)
         
         layout.addStretch()
-        return panel
+        scroll.setWidget(panel)
+        return scroll
     
     def create_output_panel(self) -> QWidget:
         """Create the right output panel."""
@@ -793,15 +843,10 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Warning", "Please enter a prompt!")
             return
         
-        # Get selected model
-        model_idx = self.model_combo.currentIndex()
-        model_map = {
-            0: "wan21",      # Auto
-            1: "wan21",      # Wan 2.1
-            2: "lightx2v",  # LightX2V
-            3: "legacy",     # Legacy
-        }
-        selected_model = model_map.get(model_idx, "legacy")
+        # Get selected model from userData
+        selected_model = self.model_combo.currentData() or "legacy"
+        if selected_model == "Loading models...":
+            selected_model = "legacy"
         
         # Get settings
         params = {
@@ -974,6 +1019,87 @@ class MainWindow(QMainWindow):
             self.gpu_label.setText("Unknown")
             self.vram_label.setText("?")
             self.model_info.setText(f"Error checking GPU: {str(e)[:30]}")
+        
+        self.refresh_model_list()
+    
+    def get_available_models(self):
+        """Detect available models dynamically."""
+        available = []
+        
+        logger.info("[Model Discovery] Scanning for available models...")
+        
+        try:
+            # Check Wan 2.1
+            try:
+                from diffusers import WanImageToVideoPipeline
+                available.append(("wan21", "Wan 2.1 (High Quality)"))
+                logger.info("[Model Discovery] Found: Wan 2.1")
+            except ImportError:
+                pass
+            
+            # Check Wan 2.2
+            try:
+                from diffusers import WanImageToVideoPipeline
+                available.append(("wan22", "Wan 2.2 (Latest)"))
+                logger.info("[Model Discovery] Found: Wan 2.2")
+            except ImportError:
+                pass
+            
+            # Check LightX2V
+            try:
+                from lightx2v import LightX2VPipeline
+                available.append(("lightx2v", "LightX2V (Fast)"))
+                logger.info("[Model Discovery] Found: LightX2V")
+            except ImportError:
+                pass
+            
+            # Check Legacy (always available if imports work)
+            try:
+                from src.picture_aliver.main import Pipeline
+                available.append(("legacy", "Legacy Pipeline"))
+                logger.info("[Model Discovery] Found: Legacy Pipeline")
+            except ImportError:
+                pass
+            
+        except Exception as e:
+            logger.warning(f"[Model Discovery] Scan error: {e}")
+        
+        # Fallback defaults if nothing detected
+        if not available:
+            logger.warning("[Model Discovery] No models detected, using defaults")
+            available = [
+                ("wan21", "Wan 2.1 (High Quality)"),
+                ("lightx2v", "LightX2V (Fast)"),
+                ("legacy", "Legacy Pipeline"),
+            ]
+        
+        logger.info(f"[Model Discovery] Total models found: {len(available)}")
+        return available
+    
+    def refresh_model_list(self):
+        """Refresh the model dropdown with available models."""
+        try:
+            self.model_combo.clear()
+            available_models = self.get_available_models()
+            
+            for model_id, model_name in available_models:
+                self.model_combo.addItem(model_name, userData=model_id)
+            
+            # Log detected models
+            detected = [name for _, name in available_models]
+            logger.info(f"[UI] Model dropdown populated with: {detected}")
+            self.log(f"[Model Discovery] Found {len(available_models)} model(s)")
+            
+        except Exception as e:
+            logger.error(f"[UI] Failed to refresh model list: {e}")
+            # Fallback to default list
+            self.model_combo.clear()
+            self.model_combo.addItems([
+                "Auto (Best Available)",
+                "Wan 2.1 (High Quality)",
+                "LightX2V (Fast)",
+                "Legacy Pipeline"
+            ])
     
     def closeEvent(self, event):
         """Handle window close."""
