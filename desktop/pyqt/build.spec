@@ -30,21 +30,24 @@ if src_dir.exists():
             src_modules.append((str(py_file), "src"))
 
 # Import PyInstaller utilities for collecting binaries
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules, collect_data_files
 
 # Collect all torch and torchvision data including DLLs
-torch_datas, torch_binaries = collect_all('torch')
-torchvision_datas, torchvision_binaries = collect_all('torchvision')
+torch_all = collect_all('torch')
+torchvision_all = collect_all('torchvision')
+
+# collect_all returns (datas, binaries, zipfiles, remote_ui) - we need datas
+torch_datas = torch_all[0] if torch_all else []
+torchvision_datas = torchvision_all[0] if torchvision_all else []
 
 # Collect PyTorch extensions binaries (includes CUDA DLLs)
 try:
-    from PyInstaller.utils.hooks import collect_data_files
     torch_c_datas = collect_data_files('torch._C')
 except:
     torch_c_datas = []
 
-all_binaries = torch_binaries + torchvision_binaries
-all_datas = torch_datas + torchvision_datas + torch_c_datas
+# Combine all datas
+all_datas = list(torch_datas) + list(torchvision_datas) + list(torch_c_datas)
 
 a = Analysis(
     [str(SCRIPT_PATH)],
@@ -52,7 +55,7 @@ a = Analysis(
         str(PROJECT_ROOT),
         str(PROJECT_ROOT / "src"),
     ],
-    binaries=all_binaries,
+    binaries=[],
     datas=all_datas + [
         (str(PROJECT_ROOT / "configs"), "configs"),
         (str(PROJECT_ROOT / "src/picture_aliver/config.yaml"), "src/picture_aliver"),
