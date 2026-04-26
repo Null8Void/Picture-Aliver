@@ -1,0 +1,152 @@
+# Picture-Aliver Model Extensions Configuration
+# Configuration for multi-model support
+
+# =============================================================================
+# MODEL LOADING SETTINGS
+# =============================================================================
+
+# Default model to use when no specific model requested
+default_model: "sdxl_base"
+
+# Default device to load models on
+# Options: cuda, cpu, auto ( CUDA if available )
+default_device: "auto"
+
+# Default precision
+# Options: float32, float16, bfloat16
+default_dtype: "float16"
+
+# =============================================================================
+# CACHE SETTINGS
+# =============================================================================
+
+# Cache models in memory after loading (recommended)
+cache_models: true
+
+# Maximum models to cache simultaneously
+max_cached_models: 2
+
+# Unload models when memory pressure detected
+auto_unload_on_pressure: true
+
+# Memory threshold for auto-unload (% of available VRAM)
+memory_threshold: 0.85
+
+# =============================================================================
+# MODEL LOOKUP PATHS
+# =============================================================================
+
+# HuggingFace cache directory
+# Default: ~/.cache/huggingface/
+hf_cache_dir: ""
+
+# Local model paths (override HF downloads)
+# Format: { "model_id": "/path/to/model" }
+local_model_paths: {}
+
+# =============================================================================
+# FALLBACK ORDER
+# =============================================================================
+
+# Fallback models in order of priority when primary fails
+# Models here will be tried in order until one succeeds
+fallback_models:
+  - "sdxl_base"
+  - "sd15_base"
+
+# Fallback for motion models
+motion_fallback_models:
+  - "svd"
+
+# =============================================================================
+# MODEL-SPECIFIC SETTINGS
+# =============================================================================
+
+model_settings:
+  # SDXL Base
+  sdxl_base:
+    guidance_scale: 7.5
+    num_inference_steps: 30
+    guidance_rescale: 0.0
+  
+  # SD 1.5 Base
+  sd15_base:
+    guidance_scale: 7.5
+    num_inference_steps: 25
+    guidance_rescale: 0.0
+  
+  # Motion models
+  svd:
+    num_frames: 25
+    fps: 8
+
+# =============================================================================
+# SAFETY SETTINGS
+# =============================================================================
+
+# Enable safety checker (filters inappropriate content)
+enable_safety_checker: true
+
+# Safety checker's moderation level
+# Options: 0 (most strict), 1 (default), 2 (minimal)
+safety_moderation_level: 1
+
+# =============================================================================
+# DEVICE SETTINGS
+# =============================================================================
+
+# Use CPU offloading to save VRAM
+enable_sequential_cpu_offload: false
+
+# Use attention slicing for lower VRAM
+enable_attention_slicing: false
+
+# Tile VAE for massive images (if supported)
+enable_vae_tiling: false
+
+# =============================================================================
+# GENERATION DEFAULTS
+# =============================================================================
+
+# Default image size (if not specified)
+default_width: 1024
+default_height: 1024
+
+# SDXL defaults
+sdxl_default_width: 1024
+sdxl_default_height: 1024
+
+# SD 1.5 defaults
+sd_default_width: 512
+sd_default_height: 512
+
+# Maximum image size to generate
+max_width: 2048
+max_height: 2048
+
+# =============================================================================
+# ADVANCED SETTINGS
+# =============================================================================
+
+# Compile model for faster inference (PyTorch 2.0+)
+compile_model: false
+
+# Enable xFormers for faster attention
+enable_xformers: false
+
+# Use torchao for quantization (advanced)
+enable_torchao: false
+
+# =============================================================================
+# LOGGER SETTINGS
+# =============================================================================
+
+# Log level for model operations
+# Options: DEBUG, INFO, WARNING, ERROR
+log_level: "INFO"
+
+# Log model loading times
+log_timing: true
+
+# Log VRAM usage
+log_memory_usage: true

@@ -1,0 +1,216 @@
+# Picture-Aliver Extended Model Configuration
+# Configuration file for selecting and configuring video generation models
+
+# =============================================================================
+# MODEL SELECTION
+# =============================================================================
+
+# Primary model to use for video generation
+# Options: "wan21", "wan22", "lightx2v", "hunyuan", "ltx", "cogvideo", "longcat", "legacy"
+# Default: "wan21"
+primary_model: "wan21"
+
+# Fallback models in priority order (tried in sequence on failure)
+# Options: "wan21", "wan22", "lightx2v", "hunyuan", "ltx", "cogvideo", "longcat", "legacy", "none"
+fallback_models:
+  - "legacy"
+
+# =============================================================================
+# WAN 2.1 MODEL CONFIGURATION
+# =============================================================================
+
+wan21:
+  # Model variant
+  # Options:
+  #   - Wan-AI/Wan2.1-I2V-14B-480P-Diffusers (14B, 480p, ~16GB VRAM)
+  #   - Wan-AI/Wan2.1-I2V-14B-720P-Diffusers (14B, 720p, ~24GB VRAM)
+  #   - Wan-AI/Wan2.1-I2V-1.3B-720P-Diffusers (1.3B, 720p, ~8GB VRAM)
+  model_id: "Wan-AI/Wan2.1-I2V-14B-480P-Diffusers"
+  
+  # Generation parameters
+  num_frames: 81
+  guidance_scale: 5.0
+  num_inference_steps: 40
+  fps: 16
+  
+  # Memory optimization
+  enable_offload: true
+  torch_dtype: "bfloat16"
+
+# =============================================================================
+# WAN 2.2 MODEL CONFIGURATION  
+# =============================================================================
+
+wan22:
+  model_id: "Wan-AI/Wan2.2-I2V-A14B-Diffusers"
+  model_cls: "wan2.2_moe"
+  
+  num_frames: 81
+  guidance_scale: 3.5
+  num_inference_steps: 40
+  fps: 16
+  height: 480
+  width: 832
+  
+  # MoE specific
+  use_moe: true
+  
+  enable_offload: true
+
+# =============================================================================
+# LIGHTX2V FRAMEWORK CONFIGURATION
+# =============================================================================
+
+lightx2v:
+  # Framework settings
+  model_path: "lightx2v/Wan2.2-Distill-Models"
+  model_cls: "wan2.2_moe"
+  task: "i2v"
+  
+  # Generation parameters
+  height: 480
+  width: 832
+  num_frames: 81
+  guidance_scale: 3.5
+  infer_steps: 40
+  sample_shift: 5.0
+  
+  # Memory optimization
+  enable_offload: true
+  cpu_offload: true
+  offload_granularity: "block"
+  
+  # Quantization for lower VRAM
+  # Options: null, w8a8-int8, w8a8-fp8, w4a4-nvfp4
+  quantization: null
+  
+  # 4-step distilled models (faster)
+  use_distilled: true
+  distilled_steps: 4
+
+# =============================================================================
+# HUNYUANVIDEO-I2V CONFIGURATION
+# =============================================================================
+
+hunyuan:
+  # Model path (local or HuggingFace)
+  model_path: "tencent/HunyuanVideo-1.5"
+  
+  # Generation parameters
+  num_frames: 81
+  guidance_scale: 7.5
+  num_inference_steps: 30
+  fps: 16
+  height: 480
+  width: 832
+  
+  # Memory optimization
+  enable_offload: true
+  use_sequential_cpu_offload: true
+  
+  # Multi-GPU
+  num_gpus: 1
+
+# =============================================================================
+# LTX-VIDEO CONFIGURATION
+# =============================================================================
+
+ltx:
+  # Model path
+  model_path: "Lightricks/LTX-Video"
+  
+  # Generation parameters
+  num_frames: 121
+  guidance_scale: 4.0
+  num_inference_steps: 20
+  fps: 24
+  height: 480
+  width: 704
+  
+  # Quantization (Q8 = 8-bit, much faster on 8GB)
+  use_quantized: true
+  quantization_type: "q8"
+  
+  # Low VRAM settings
+  low_vram: true
+
+# =============================================================================
+# COGVIDEO CONFIGURATION
+# =============================================================================
+
+cogvideo:
+  # Model variant: cogvideo-i2v or cogvideo-t2v
+  model_type: "cogvideo-i2v"
+  
+  # Generation parameters
+  num_frames: 32
+  guidance_scale: 8.0
+  num_inference_steps: 20
+  fps: 8
+  height: 320
+  width: 512
+  
+  # Memory optimization  
+  enable_offload: true
+
+# =============================================================================
+# LONGCAT-VIDEO CONFIGURATION  
+# =============================================================================
+
+longcat:
+  # Model path
+  model_path: "meituan-longcat/LongCat-Video"
+  
+  # Generation parameters
+  num_frames: 81
+  guidance_scale: 6.0
+  num_inference_steps: 25
+  fps: 16
+  height: 480
+  width: 832
+  
+  # MIT Licensed - fully open
+  license: "MIT"
+
+# =============================================================================
+# LEGACY PIPELINE CONFIGURATION
+# =============================================================================
+
+legacy:
+  precision: "fp16"
+  device: "auto"
+  adaptive_resolution: true
+
+# =============================================================================
+# COMMON SETTINGS
+# =============================================================================
+
+common:
+  output_dir: "./outputs"
+  output_format: "mp4"
+  output_codec: "libx264"
+  output_quality: 23
+  
+  default_negative_prompt: "Bright tones, overexposed, static, blurred details, subtitles, style, works, paintings, images, static, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete"
+  
+  model_cache_dir: "./models"
+  use_model_cache: true
+  
+  log_level: "INFO"
+  log_generation_time: true
+  
+  validate_on_start: true
+
+# =============================================================================
+# MODEL CAPABILITY MATRIX
+# =============================================================================
+# Model        | I2V | T2V | License   | Min VRAM | Quality | Speed
+# ------------|-----|-----|----------|----------|---------|------
+# wan21       | Yes | Yes | Apache 2.0| 16GB    | High    | Medium
+# wan22       | Yes | Yes | Apache 2.0| 16GB    | High    | Medium
+# lightx2v   | Yes | Yes | Apache 2.0| 8GB     | High    | Fast
+# hunyuan    | Yes | Yes | Research | 16GB     | High    | Slow
+# ltx        | Yes | Yes | Apache 2.0| 8GB     | Medium | Fast
+# cogvideo   | Yes | Yes | Apache 2.0| 12GB    | Medium | Slow
+# longcat    | Yes | Yes | MIT      | 16GB    | High    | Medium
+# legacy     | Yes | Yes | Apache 2.0| 2GB     | Low    | Slow

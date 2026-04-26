@@ -1,0 +1,140 @@
+# Picture-Aliver Model Configuration
+# Configuration file for selecting and configuring video generation models
+
+# =============================================================================
+# MODEL SELECTION
+# =============================================================================
+
+# Primary model to use for video generation
+# Options: "wan21", "lightx2v", "legacy"
+# Default: "wan21"
+primary_model: "wan21"
+
+# Fallback model to use if primary fails
+# Options: "wan21", "lightx2v", "legacy", "none"
+fallback_model: "legacy"
+
+# =============================================================================
+# WAN 2.1 MODEL CONFIGURATION
+# =============================================================================
+
+wan21:
+  # Model variant
+  # Options:
+  #   - Wan-AI/Wan2.1-I2V-14B-480P-Diffusers (14B, 480p, ~16GB VRAM)
+  #   - Wan-AI/Wan2.1-I2V-14B-720P-Diffusers (14B, 720p, ~24GB VRAM)
+  #   - Wan-AI/Wan2.1-I2V-1.3B-720P-Diffusers (1.3B, 720p, ~8GB VRAM)
+  model_id: "Wan-AI/Wan2.1-I2V-14B-480P-Diffusers"
+  
+  # Generation parameters
+  num_frames: 81           # Number of frames (81 = 5 seconds at 16fps)
+  guidance_scale: 5.0       # CFG strength (1.0-20.0)
+  num_inference_steps: 40    # Denoising steps (more = better quality, slower)
+  fps: 16                  # Output video FPS
+  
+  # Resolution (auto-calculated from max_area if not set)
+  # max_area: 720 * 1280  # For 720p
+  # max_area: 480 * 832   # For 480p
+  
+  # Memory optimization
+  enable_offload: true      # Enable CPU offloading to save VRAM
+  torch_dtype: "bfloat16"   # bfloat16, float16, float32
+  
+  # Use quantized GGUF model for lower VRAM (requires ComfyUI-GGUF)
+  # use_gguf: false
+  # gguf_model_path: null
+
+# =============================================================================
+# LIGHTX2V FRAMEWORK CONFIGURATION
+# =============================================================================
+
+lightx2v:
+  # Model path (local or HuggingFace)
+  # Use HuggingFace model ID or local path
+  model_path: "lightx2v/Wan2.2-Distill-Models"
+  
+  # Model class
+  # Options: wan2.1, wan2.2_moe, hunyuan, ltx2
+  model_cls: "wan2.2_moe"
+  
+  # Task type
+  # Options: i2v (image-to-video), t2v (text-to-video)
+  task: "i2v"
+  
+  # Generation parameters
+  height: 480            # 480 or 720
+  width: 832            # 832 or 1280
+  num_frames: 81
+  guidance_scale: 3.5
+  infer_steps: 40
+  sample_shift: 5.0
+  
+  # Memory optimization
+  enable_offload: true
+  cpu_offload: true
+  offload_granularity: "block"  # block or phase
+  text_encoder_offload: true
+  image_encoder_offload: false
+  vae_offload: false
+  
+  # Quantization (for 8GB VRAM)
+  # Options: null, w8a8-int8, w8a8-fp8, w4a4-nvfp4
+  quantization: null
+
+# =============================================================================
+# LEGACY PIPELINE CONFIGURATION
+# =============================================================================
+
+legacy:
+  # Use existing picture_aliver pipeline
+  # Falls back to existing src/picture_aliver implementation
+  
+  # Memory optimization
+  precision: "fp16"         # fp16, fp32
+  device: "auto"           # auto, cpu, cuda
+  
+  # Resolution based on GPU tier
+  # auto-adjusts based on available VRAM
+  adaptive_resolution: true
+  
+  # Max resolution per VRAM tier:
+  # 2GB: 384x384
+  # 4GB: 512x512
+  # 8GB: 768x768
+  # 12GB: 1024x1024
+  # 24GB: 1280x1280
+
+# =============================================================================
+# COMMON SETTINGS
+# =============================================================================
+
+common:
+  # Output settings
+  output_dir: "./outputs"
+  output_format: "mp4"      # mp4, gif
+  output_codec: "libx264"   # libx264, libx265
+  output_quality: 23        # CRFs 0-51 (lower = better)
+  
+  # Prompt defaults
+  default_negative_prompt: "Bright tones, overexposed, static, blurred details, subtitles, style, works, paintings, images, static, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, misshapen limbs, fused fingers, still picture, messy background"
+  
+  # Caching
+  model_cache_dir: "./models"     # Local model cache
+  use_model_cache: true         # Cache downloaded models
+  
+  # Logging
+  log_level: "INFO"           # DEBUG, INFO, WARNING, ERROR
+  log_generation_time: true
+  
+  # Validation
+  validate_on_start: true       # Run validation on startup
+  validate_model_files: true     # Check model files exist
+
+# =============================================================================
+# ENVIRONMENT VARIABLES (optional overrides)
+# =============================================================================
+
+# CUDA_VISIBLE_DEVICES=0
+# PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+# HF_HOME=./models/cache
+# TRANSFORMERS_CACHE=./models/cache/transformers
