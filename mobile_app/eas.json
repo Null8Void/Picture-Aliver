@@ -3,10 +3,6 @@
     "version": ">=5.0.0"
   },
   "build": {
-    "production": {
-      "cache": {
-        "disabled": true
-      }
-    }
+    "production": {}
   }
 }
