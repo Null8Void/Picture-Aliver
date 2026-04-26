@@ -4,7 +4,7 @@
 PyInstaller build specification for Picture-Aliver Desktop (PyQt5)
 
 Build commands:
-    pyinstaller desktop/pyqt/build.spec --noconfirm
+    cd /path/to/picture-aliver
     python -m PyInstaller desktop/pyqt/build.spec --noconfirm
 
 Output:
@@ -17,39 +17,41 @@ from pathlib import Path
 
 block_cipher = None
 
-# Project root directory - dynamically resolve
-project_root = Path(SPECPATH).parent.parent.parent.resolve()
+# Use forward slashes to avoid escape sequence issues
+PROJECT_ROOT = Path("D:/Git/Picture-Aliver")
+SCRIPT_PATH = PROJECT_ROOT / "desktop" / "pyqt" / "main.py"
 
 a = Analysis(
-    ['desktop/pyqt/main.py'],
-    pathex=[str(project_root)],
+    [str(SCRIPT_PATH)],
+    pathex=[str(PROJECT_ROOT)],
     binaries=[],
     datas=[
-        (str(project_root / 'configs/default.yaml'), 'configs'),
-        (str(project_root / 'src/picture_aliver/config.yaml'), 'src/picture_aliver'),
+        (str(PROJECT_ROOT / "configs/default.yaml"), "configs"),
+        (str(PROJECT_ROOT / "configs/model_config.yaml"), "configs"),
+        (str(PROJECT_ROOT / "src/picture_aliver/config.yaml"), "src/picture_aliver"),
     ],
     hiddenimports=[
         # PyQt5
-        'PyQt5',
-        'PyQt5.QtCore',
-        'PyQt5.QtGui',
-        'PyQt5.QtWidgets',
+        "PyQt5",
+        "PyQt5.QtCore",
+        "PyQt5.QtGui",
+        "PyQt5.QtWidgets",
         # PyTorch
-        'torch',
-        'torchvision',
+        "torch",
+        "torchvision",
         # FastAPI
-        'uvicorn',
-        'uvicorn.logging',
-        'uvicorn.config',
-        'fastapi',
-        'starlette',
-        'pydantic',
-        'python_multipart',
+        "uvicorn",
+        "uvicorn.logging",
+        "uvicorn.config",
+        "fastapi",
+        "starlette",
+        "pydantic",
+        "python_multipart",
         # Pipeline
-        'src.picture_aliver.main',
-        'src.picture_aliver.api',
-        'src.picture_aliver.config',
-        'src.picture_aliver.gpu_optimization',
+        "src.picture_aliver.main",
+        "src.picture_aliver.api",
+        "src.picture_aliver.config",
+        "src.picture_aliver.gpu_optimization",
     ],
     hookspath=[],
     hooksconfig={},
