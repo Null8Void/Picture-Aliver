@@ -1023,33 +1023,72 @@ class MainWindow(QMainWindow):
         self.refresh_model_list()
     
     def get_available_models(self):
-        """Detect available models dynamically."""
+        """Detect available models from MODEL_REGISTRY."""
         available = []
         
-        logger.info("[Model Discovery] Scanning for available models...")
+        logger.info("[Model Discovery] Scanning model registry...")
         
-        # Model types supported by the application
-        all_models = [
-            ("wan21", "Wan 2.1 (High Quality)"),
-            ("wan22", "Wan 2.2 (Latest)"),
-            ("lightx2v", "LightX2V (Fast)"),
-            ("hunyuan", "HunyuanVideo"),
-            ("ltx", "LTX-Video"),
-            ("cogvideo", "CogVideo"),
-            ("longcat", "LongCat-Video"),
-            ("legacy", "Legacy Pipeline"),
-        ]
+        try:
+            from src.core.model_registry import MODEL_REGISTRY, ModelCategory
+            
+            # Get all I2V models from registry
+            i2v_models = MODEL_REGISTRY.get_by_category(ModelCategory.I2V)
+            
+            # Also get furry models
+            try:
+                from src.modules.generation.furry_models import FURRY_MODELS
+                logger.info(f"[Model Discovery] Found {len(FURRY_MODELS)} furry-specific models")
+            except ImportError:
+                FURRY_MODELS = {}
+            
+            # Add models from registry (sorted by rating for organization)
+            for model in i2v_models:
+                model_id = model.model_path.lower()
+                display_name = f"{model.name} ({model.rating.value})"
+                available.append((model_id, display_name))
+                logger.info(f"[Model Discovery] Available: {model.name} [{model.rating.value}]")
+            
+            # Add furry-specific models
+            for furry_id, furry_info in FURRY_MODELS.items():
+                if furry_id not in [a[0] for a in available]:
+                    available.append((furry_id, f"{furry_info.name} (furry)"))
+                    logger.info(f"[Model Discovery] Furry: {furry_info.name}")
+            
+        except ImportError as e:
+            logger.warning(f"[Model Discovery] Cannot import MODEL_REGISTRY: {e}")
+            # Fallback to basic models
+            available = [
+                ("wan21", "Wan 2.1 (High Quality)"),
+                ("wan22", "Wan 2.2 (Latest)"),
+                ("lightx2v", "LightX2V (Fast)"),
+                ("fluffyrock", "Fluffyrock"),
+                ("yiffymix", "Yiffymix"),
+                ("dreamshaper", "Dreamshaper"),
+                ("hunyuan", "HunyuanVideo"),
+                ("ltx", "LTX-Video"),
+            ]
         
-        # Check each model for availability
-        for model_id, model_name in all_models:
-            if self._check_model_available(model_id):
-                available.append((model_id, model_name))
-                logger.info(f"[Model Discovery] Available: {model_name}")
-        
-        # If no models available, provide all as options (they may work at runtime)
+        # If still empty, use defaults
         if not available:
-            logger.warning("[Model Discovery] No models detected, adding all model types")
-            available = all_models
+            available = [
+                ("wan21", "Wan 2.1 (High Quality)"),
+                ("wan22", "Wan 2.2 (Latest)"),
+                ("lightx2v", "LightX2V (Fast)"),
+                ("fluffyrock", "Fluffyrock"),
+                ("fluffyrock_unbound", "Fluffyrock Unbound"),
+                ("yiffymix", "Yiffymix"),
+                ("yiffymix_v2", "Yiffymix V2"),
+                ("dreamshaper", "Dreamshaper"),
+                ("dreamshaper_xl", "Dreamshaper XL"),
+                ("pawpunk", "PawPunk"),
+                ("furryforge", "FurryForge"),
+                ("feralcraft", "FeralCraft"),
+                ("kemonomimi", "Kemonomimi Mix"),
+                ("creaturecraft", "CreatureCraft"),
+                ("hunyuan", "HunyuanVideo"),
+                ("ltx", "LTX-Video"),
+                ("legacy", "Legacy Pipeline"),
+            ]
         
         logger.info(f"[Model Discovery] Total models available: {len(available)}")
         return available
