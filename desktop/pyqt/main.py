@@ -249,9 +249,13 @@ class MainWindow(QMainWindow):
         self.worker: Optional[GenerationWorker] = None
         self.selected_image_path: Optional[str] = None
         self._use_unified_model = True
+        self.last_video_path: Optional[str] = None
         
         self.init_ui()
         self.setup_signals()
+        
+        # Check GPU status
+        self.check_gpu_status()
         
     def init_ui(self):
         """Initialize the user interface."""
@@ -283,7 +287,14 @@ class MainWindow(QMainWindow):
         # Status bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("Ready")
+        self.status_bar.showMessage("✅ Ready - Select an image and enter a prompt to generate video")
+        self.status_bar.setStyleSheet("""
+            QStatusBar {
+                background: #10B981;
+                color: white;
+                padding: 4px;
+            }
+        """)
         
         # Menu bar
         self.create_menu_bar()
@@ -297,25 +308,65 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(panel)
         layout.setSpacing(15)
         
-        # Title
-        title = QLabel("Image-to-Video Generation")
-        title.setFont(QFont("Arial", 16, QFont.Bold))
-        layout.addWidget(title)
+        # Title with logo
+        title_layout = QHBoxLayout()
+        title = QLabel("Picture-Aliver")
+        title.setFont(QFont("Segoe UI", 20, QFont.Bold))
+        title.setStyleSheet("color: #6366F1;")
+        title_layout.addWidget(title)
+        title_layout.addStretch()
+        
+        subtitle = QLabel("AI Image-to-Video")
+        subtitle.setFont(QFont("Segoe UI", 10))
+        subtitle.setStyleSheet("color: #888;")
+        title_layout.addWidget(subtitle)
+        
+        layout.addLayout(title_layout)
         
         # Image selection
         image_group = QGroupBox("Source Image")
+        image_group.setStyleSheet("QGroupBox { font-weight: bold; }")
         image_layout = QVBoxLayout(image_group)
         
-        self.image_label = QLabel("No image selected")
+        self.image_label = QLabel("No image selected\n\nClick 'Select Image' to choose an image")
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setMinimumHeight(200)
-        self.image_label.setStyleSheet("border: 2px dashed #ccc; border-radius: 8px; background: #f5f5f5;")
+        self.image_label.setStyleSheet("""
+            QLabel {
+                border: 2px dashed #6366F1;
+                border-radius: 12px;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #f8f9fa, stop:1 #e9ecef);
+                color: #6c757d;
+                padding: 20px;
+            }
+        """)
         image_layout.addWidget(self.image_label)
         
         btn_layout = QHBoxLayout()
-        self.select_btn = QPushButton("Select Image")
+        self.select_btn = QPushButton("📁 Select Image")
+        self.select_btn.setIcon(QIcon.fromTheme("document-open"))
+        self.select_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e9ecef;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #dee2e6; }
+        """)
         self.select_btn.clicked.connect(self.select_image)
-        self.clear_btn = QPushButton("Clear")
+        self.clear_btn = QPushButton("🗑 Clear")
+        self.clear_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e9ecef;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 6px;
+            }
+            QPushButton:hover { background-color: #dee2e6; }
+        """)
         self.clear_btn.clicked.connect(self.clear_image)
         btn_layout.addWidget(self.select_btn)
         btn_layout.addWidget(self.clear_btn)
@@ -325,27 +376,87 @@ class MainWindow(QMainWindow):
         
         # Prompt input
         prompt_group = QGroupBox("Animation Prompt")
+        prompt_group.setStyleSheet("QGroupBox { font-weight: bold; }")
         prompt_layout = QVBoxLayout(prompt_group)
         
         self.prompt_edit = QTextEdit()
-        self.prompt_edit.setPlaceholderText("Describe the motion you want (e.g., gentle wave, wind blowing, cinematic pan)")
-        self.prompt_edit.setMaximumHeight(100)
+        self.prompt_edit.setPlaceholderText("Describe the motion you want...\n\nExamples:\n• Gentle wave motion\n• Wind blowing through trees\n• Cinematic pan left to right\n• Subtle breathing animation")
+        self.prompt_edit.setMaximumHeight(120)
+        self.prompt_edit.setStyleSheet("""
+            QTextEdit {
+                border: 1px solid #dee2e6;
+                border-radius: 8px;
+                padding: 10px;
+                background: white;
+                font-size: 13px;
+            }
+            QTextEdit:focus {
+                border: 2px solid #6366F1;
+            }
+        """)
         prompt_layout.addWidget(self.prompt_edit)
         
         layout.addWidget(prompt_group)
         
+        # Model Selection
+        model_group = QGroupBox("Model Selection")
+        model_group.setStyleSheet("QGroupBox { font-weight: bold; }")
+        model_layout = QVBoxLayout(model_group)
+        
+        model_select_layout = QHBoxLayout()
+        model_select_layout.addWidget(QLabel("Model:"))
+        self.model_combo = QComboBox()
+        self.model_combo.addItems([
+            "Auto (Best Available)",
+            "Wan 2.1 (High Quality)",
+            "LightX2V (Fast)",
+            "Legacy Pipeline"
+        ])
+        self.model_combo.setStyleSheet("""
+            QComboBox {
+                padding: 8px;
+                border-radius: 6px;
+                border: 1px solid #dee2e6;
+            }
+        """)
+        model_select_layout.addWidget(self.model_combo)
+        model_select_layout.addStretch()
+        model_layout.addLayout(model_select_layout)
+        
+        # Model info
+        self.model_info = QLabel("VRAM: Checking...")
+        self.model_info.setStyleSheet("color: #6c757d; font-size: 11px;")
+        model_layout.addWidget(self.model_info)
+        
+        layout.addWidget(model_group)
+        
         # Settings
-        settings_group = QGroupBox("Settings")
+        settings_group = QGroupBox("Generation Settings")
+        settings_group.setStyleSheet("QGroupBox { font-weight: bold; }")
         settings_layout = QVBoxLayout(settings_group)
         
         # Duration
         duration_layout = QHBoxLayout()
-        duration_layout.addWidget(QLabel("Duration:"))
+        duration_layout.addWidget(QLabel("⏱ Duration:"))
         self.duration_slider = QSlider(Qt.Horizontal)
         self.duration_slider.setMinimum(1)
         self.duration_slider.setMaximum(30)
         self.duration_slider.setValue(3)
+        self.duration_slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                height: 8px;
+                background: #e9ecef;
+                border-radius: 4px;
+            }
+            QSlider::handle:horizontal {
+                width: 18px;
+                margin: -5px 0;
+                background: #6366F1;
+                border-radius: 9px;
+            }
+        """)
         self.duration_label = QLabel("3s")
+        self.duration_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
         self.duration_slider.valueChanged.connect(
             lambda v: self.duration_label.setText(f"{v}s")
         )
@@ -355,54 +466,67 @@ class MainWindow(QMainWindow):
         
         # FPS
         fps_layout = QHBoxLayout()
-        fps_layout.addWidget(QLabel("FPS:"))
+        fps_layout.addWidget(QLabel("🎬 FPS:"))
         self.fps_combo = QComboBox()
         self.fps_combo.addItems(["4", "6", "8", "12", "16", "24", "30"])
         self.fps_combo.setCurrentText("8")
+        self.fps_combo.setStyleSheet("padding: 6px; border-radius: 4px;")
         fps_layout.addWidget(self.fps_combo)
         fps_layout.addStretch()
-        settings_layout.addLayout(fps_layout)
         
         # Resolution
         res_layout = QHBoxLayout()
-        res_layout.addWidget(QLabel("Resolution:"))
+        res_layout.addWidget(QLabel("📐 Resolution:"))
         self.res_combo = QComboBox()
         self.res_combo.addItems(["256", "384", "512", "768", "1024"])
         self.res_combo.setCurrentText("512")
+        self.res_combo.setStyleSheet("padding: 6px; border-radius: 4px;")
         res_layout.addWidget(self.res_combo)
         res_layout.addStretch()
+        settings_layout.addLayout(fps_layout)
         settings_layout.addLayout(res_layout)
         
         # Motion mode
         motion_layout = QHBoxLayout()
-        motion_layout.addWidget(QLabel("Motion:"))
+        motion_layout.addWidget(QLabel("🌊 Motion:"))
         self.motion_combo = QComboBox()
         self.motion_combo.addItems(["auto", "subtle", "cinematic", "zoom", "pan", "furry"])
         self.motion_combo.setCurrentText("auto")
+        self.motion_combo.setStyleSheet("padding: 6px; border-radius: 4px;")
         motion_layout.addWidget(self.motion_combo)
         motion_layout.addStretch()
         settings_layout.addLayout(motion_layout)
         
         # Quality check
-        self.quality_check = QCheckBox("Enable auto-correction")
+        self.quality_check = QCheckBox("✨ Enable AI auto-correction")
         self.quality_check.setChecked(True)
+        self.quality_check.setStyleSheet("font-weight: bold;")
         settings_layout.addWidget(self.quality_check)
         
         layout.addWidget(settings_group)
         
         # Generate button
-        self.generate_btn = QPushButton("Generate Video")
-        self.generate_btn.setMinimumHeight(50)
+        self.generate_btn = QPushButton("🎬 Generate Video")
+        self.generate_btn.setMinimumHeight(55)
         self.generate_btn.setStyleSheet("""
             QPushButton {
-                background-color: #6366F1;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #6366F1, stop:1 #8B5CF6);
                 color: white;
                 font-size: 16px;
                 font-weight: bold;
-                border-radius: 8px;
+                border: none;
+                border-radius: 10px;
+                padding: 12px;
             }
-            QPushButton:hover { background-color: #4F46E5; }
-            QPushButton:disabled { background-color: #ccc; }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #4F46E5, stop:1 #7C3AED);
+            }
+            QPushButton:disabled {
+                background-color: #ccc;
+                color: #888;
+            }
         """)
         self.generate_btn.clicked.connect(self.start_generation)
         layout.addWidget(self.generate_btn)
@@ -417,78 +541,219 @@ class MainWindow(QMainWindow):
         layout.setSpacing(15)
         
         # Title
-        title = QLabel("Output")
-        title.setFont(QFont("Arial", 16, QFont.Bold))
+        title = QLabel("Output & Preview")
+        title.setFont(QFont("Segoe UI", 16, QFont.Bold))
+        title.setStyleSheet("color: #6366F1;")
         layout.addWidget(title)
         
         # Progress
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: none;
+                border-radius: 6px;
+                height: 12px;
+                background: #e9ecef;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #6366F1, stop:1 #8B5CF6);
+                border-radius: 6px;
+            }
+        """)
         self.progress_label = QLabel("")
+        self.progress_label.setStyleSheet("color: #6c757d; font-weight: bold;")
         layout.addWidget(self.progress_bar)
         layout.addWidget(self.progress_label)
         
         # Video preview
-        preview_group = QGroupBox("Video Preview")
+        preview_group = QGroupBox("Generated Video")
+        preview_group.setStyleSheet("QGroupBox { font-weight: bold; }")
         preview_layout = QVBoxLayout(preview_group)
         
-        self.video_label = QLabel("No video generated yet")
+        self.video_label = QLabel("No video generated yet\n\nGenerate a video to see preview here")
         self.video_label.setAlignment(Qt.AlignCenter)
-        self.video_label.setMinimumHeight(300)
-        self.video_label.setStyleSheet("border: 2px solid #ccc; border-radius: 8px; background: #f5f5f5;")
+        self.video_label.setMinimumHeight(250)
+        self.video_label.setStyleSheet("""
+            QLabel {
+                border: 2px dashed #dee2e6;
+                border-radius: 12px;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #f8f9fa, stop:1 #e9ecef);
+                color: #6c757d;
+                padding: 20px;
+            }
+        """)
         preview_layout.addWidget(self.video_label)
         
-        self.play_btn = QPushButton("Play Video")
+        # Action buttons
+        btn_layout = QHBoxLayout()
+        self.play_btn = QPushButton("▶ Play")
         self.play_btn.setEnabled(False)
+        self.play_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #10B981;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #059669; }
+            QPushButton:disabled { background-color: #ccc; }
+        """)
         self.play_btn.clicked.connect(self.play_video)
-        preview_layout.addWidget(self.play_btn)
+        
+        self.save_btn = QPushButton("💾 Save As...")
+        self.save_btn.setEnabled(False)
+        self.save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3B82F6;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #2563EB; }
+            QPushButton:disabled { background-color: #ccc; }
+        """)
+        self.save_btn.clicked.connect(self.save_video)
+        
+        btn_layout.addWidget(self.play_btn)
+        btn_layout.addWidget(self.save_btn)
+        preview_layout.addLayout(btn_layout)
         
         layout.addWidget(preview_group)
         
         # Log output
         log_group = QGroupBox("Processing Log")
+        log_group.setStyleSheet("QGroupBox { font-weight: bold; }")
         log_layout = QVBoxLayout(log_group)
         
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
-        self.log_text.setMaximumHeight(150)
+        self.log_text.setMaximumHeight(120)
         self.log_text.setFont(QFont("Consolas", 9))
+        self.log_text.setStyleSheet("""
+            QTextEdit {
+                background: #1e1e1e;
+                color: #00ff00;
+                border: 1px solid #333;
+                border-radius: 6px;
+                padding: 8px;
+            }
+        """)
         log_layout.addWidget(self.log_text)
         
+        # Clear log button
+        clear_log_btn = QPushButton("🗑 Clear Log")
+        clear_log_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                padding: 6px 12px;
+                border: none;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #5a6268; }
+        """)
+        clear_log_btn.clicked.connect(lambda: self.log_text.clear())
+        log_layout.addWidget(clear_log_btn)
+        
         layout.addWidget(log_group)
+        
+        # Status info
+        status_layout = QHBoxLayout()
+        status_layout.addWidget(QLabel("🎯 GPU:"))
+        self.gpu_label = QLabel("Checking...")
+        self.gpu_label.setStyleSheet("color: #10B981; font-weight: bold;")
+        status_layout.addWidget(self.gpu_label)
+        status_layout.addStretch()
+        status_layout.addWidget(QLabel("💾 VRAM:"))
+        self.vram_label = QLabel("...")
+        self.vram_label.setStyleSheet("color: #8B5CF6; font-weight: bold;")
+        status_layout.addWidget(self.vram_label)
+        layout.addLayout(status_layout)
         
         return panel
     
     def create_menu_bar(self):
         """Create the application menu bar."""
         menubar = self.menuBar()
+        menubar.setStyleSheet("""
+            QMenuBar {
+                background: #f8f9fa;
+                padding: 4px;
+            }
+            QMenuBar::item {
+                padding: 6px 12px;
+                background: transparent;
+            }
+            QMenuBar::item:selected {
+                background: #e9ecef;
+            }
+            QMenu {
+                background: white;
+                border: 1px solid #dee2e6;
+            }
+            QMenu::item:selected {
+                background: #6366F1;
+                color: white;
+            }
+        """)
         
         # File menu
-        file_menu = menubar.addMenu("File")
-        file_menu.addAction("Open Image", self.select_image, "Ctrl+O")
-        file_menu.addAction("Save Video", self.save_video, "Ctrl+S")
+        file_menu = menubar.addMenu("📁 File")
+        file_menu.addAction("📂 Open Image...", self.select_image, "Ctrl+O")
+        file_menu.addAction("💾 Save Video As...", self.save_video, "Ctrl+S")
         file_menu.addSeparator()
-        file_menu.addAction("Exit", self.close, "Ctrl+Q")
+        file_menu.addAction("🚪 Exit", self.close, "Alt+F4")
+        
+        # Generate menu
+        gen_menu = menubar.addMenu("🎬 Generate")
+        gen_menu.addAction("▶ Start Generation", self.start_generation, "Ctrl+G")
+        gen_menu.addAction("⏹ Stop Generation", self.stop_generation, "Ctrl+.")
+        gen_menu.addSeparator()
+        gen_menu.addAction("🗑 Clear Image", self.clear_image)
         
         # Settings menu
-        settings_menu = menubar.addMenu("Settings")
-        settings_menu.addAction("Preferences", self.show_settings)
-        settings_menu.addAction("Backend Config", self.show_backend_config)
+        settings_menu = menubar.addMenu("⚙ Settings")
+        settings_menu.addAction("🎨 Preferences", self.show_settings)
+        settings_menu.addAction("🔧 Backend Config", self.show_backend_config)
         
         # Help menu
-        help_menu = menubar.addMenu("Help")
-        help_menu.addAction("Documentation", self.show_docs)
-        help_menu.addAction("About", self.show_about)
+        help_menu = menubar.addMenu("❓ Help")
+        help_menu.addAction("📖 Documentation", self.show_docs)
+        help_menu.addAction("ℹ About", self.show_about)
     
     def create_toolbar(self):
         """Create the application toolbar."""
         toolbar = QToolBar()
+        toolbar.setMovable(False)
+        toolbar.setStyleSheet("""
+            QToolBar {
+                background: #f8f9fa;
+                padding: 4px;
+                spacing: 8px;
+            }
+            QToolButton {
+                padding: 8px 12px;
+                border-radius: 6px;
+            }
+            QToolButton:hover {
+                background: #e9ecef;
+            }
+        """)
         self.addToolBar(toolbar)
         
-        toolbar.addAction("Open", self.select_image)
-        toolbar.addAction("Generate", self.start_generation)
+        toolbar.addAction("📂 Open", self.select_image)
         toolbar.addSeparator()
-        toolbar.addAction("Stop", self.stop_generation)
+        toolbar.addAction("🎬 Generate", self.start_generation)
+        toolbar.addAction("⏹ Stop", self.stop_generation)
+        toolbar.addSeparator()
+        toolbar.addAction("💾 Save", self.save_video)
     
     def setup_signals(self):
         """Connect signals and slots."""
@@ -528,6 +793,16 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Warning", "Please enter a prompt!")
             return
         
+        # Get selected model
+        model_idx = self.model_combo.currentIndex()
+        model_map = {
+            0: "wan21",      # Auto
+            1: "wan21",      # Wan 2.1
+            2: "lightx2v",  # LightX2V
+            3: "legacy",     # Legacy
+        }
+        selected_model = model_map.get(model_idx, "legacy")
+        
         # Get settings
         params = {
             'duration': self.duration_slider.value(),
@@ -539,16 +814,24 @@ class MainWindow(QMainWindow):
             'motion_mode': self.motion_combo.currentText(),
             'enable_quality_check': self.quality_check.isChecked(),
             'prompt': prompt,
+            'model': selected_model,
         }
         
         # Update UI
         self.generate_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
-        self.status_bar.showMessage("Generating...")
-        self.log(f"Starting generation with: {params}")
+        self.status_bar.showMessage("🎬 Generating video...")
+        self.log("=" * 40)
+        self.log(f"📷 Image: {self.selected_image_path}")
+        self.log(f"📝 Prompt: {prompt}")
+        self.log(f"🎬 Model: {selected_model}")
+        self.log(f"⏱ Duration: {params['duration']}s @ {params['fps']} FPS")
+        self.log(f"📐 Resolution: {params['width']}x{params['height']}")
+        self.log("=" * 40)
         
         # Start worker thread with unified model
+        self._use_unified_model = (selected_model != "legacy")
         self.worker = GenerationWorker(self.selected_image_path, params, self._use_unified_model)
         self.worker.progress.connect(self.on_progress)
         self.worker.finished.connect(self.on_finished)
@@ -568,7 +851,7 @@ class MainWindow(QMainWindow):
         """Handle progress updates."""
         self.progress_bar.setValue(percentage)
         self.progress_label.setText(message)
-        self.status_bar.showMessage(message)
+        self.status_bar.showMessage(f"⏳ {message}")
     
     @pyqtSlot(bool, str, str)
     def on_finished(self, success: bool, message: str, video_path: str):
@@ -577,16 +860,48 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(False)
         
         if success:
-            self.status_bar.showMessage("Generation complete!")
-            self.log(f"SUCCESS: {message}")
+            self.status_bar.showMessage("✅ Generation complete!")
+            self.status_bar.setStyleSheet("""
+                QStatusBar {
+                    background: #10B981;
+                    color: white;
+                    padding: 4px;
+                }
+            """)
+            self.log("=" * 40)
+            self.log("✅ SUCCESS!")
+            self.log(f"📁 Video: {video_path}")
+            self.log("=" * 40)
             self.last_video_path = video_path
             self.play_btn.setEnabled(True)
-            self.video_label.setText(f"Video ready:\n{video_path}")
-            QMessageBox.information(self, "Success", message)
+            self.save_btn.setEnabled(True)
+            self.video_label.setText(f"🎬 Video Generated!\n\n{video_path}")
+            self.video_label.setStyleSheet("""
+                QLabel {
+                    border: 2px solid #10B981;
+                    border-radius: 12px;
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                        stop:0 #d1fae5, stop:1 #a7f3d0);
+                    color: #065f46;
+                    padding: 20px;
+                    font-weight: bold;
+                }
+            """)
+            QMessageBox.information(self, "✅ Success", f"Video generated successfully!\n\n{video_path}")
         else:
-            self.status_bar.showMessage("Generation failed!")
-            self.log(f"FAILED: {message}")
-            QMessageBox.critical(self, "Error", message)
+            self.status_bar.showMessage("❌ Generation failed!")
+            self.status_bar.setStyleSheet("""
+                QStatusBar {
+                    background: #EF4444;
+                    color: white;
+                    padding: 4px;
+                }
+            """)
+            self.log("=" * 40)
+            self.log("❌ FAILED!")
+            self.log(f"Error: {message}")
+            self.log("=" * 40)
+            QMessageBox.critical(self, "❌ Error", f"Generation failed:\n\n{message}")
     
     def play_video(self):
         """Play the generated video."""
@@ -640,6 +955,25 @@ class MainWindow(QMainWindow):
         """Add message to log."""
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.log_text.append(f"[{timestamp}] {message}")
+    
+    def check_gpu_status(self):
+        """Check and display GPU status."""
+        try:
+            import torch
+            if torch.cuda.is_available():
+                gpu_name = torch.cuda.get_device_name(0)
+                vram = torch.cuda.get_device_properties(0).total_memory / 1024**3
+                self.gpu_label.setText(gpu_name)
+                self.vram_label.setText(f"{vram:.1f} GB")
+                self.model_info.setText(f"✓ GPU: {gpu_name} ({vram:.1f}GB VRAM)")
+            else:
+                self.gpu_label.setText("CPU")
+                self.vram_label.setText("N/A")
+                self.model_info.setText("⚠ CPU mode - GPU recommended for speed")
+        except Exception as e:
+            self.gpu_label.setText("Unknown")
+            self.vram_label.setText("?")
+            self.model_info.setText(f"Error checking GPU: {str(e)[:30]}")
     
     def closeEvent(self, event):
         """Handle window close."""
