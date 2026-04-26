@@ -622,6 +622,130 @@ class ModelRegistry:
             max_frames=24,
             base_model="stabilityai/stable-diffusion-xl-base-1.0",
         ))
+        
+        # =============================================
+        # ADDITIONAL FURRY/STYLE MODELS
+        # =============================================
+        
+        self.register(ModelInfo(
+            name="BluePencil",
+            repo_id="furry/bluepencil",
+            model_path="bluepencil",
+            category=ModelCategory.I2V,
+            rating=ContentRating.NSFW,
+            vram_mb=8000,
+            resolution=(1024, 1024),
+            max_frames=24,
+            base_model="stabilityai/stable-diffusion-xl-base-1.0",
+        ))
+        
+        self.register(ModelInfo(
+            name="KotosMix",
+            repo_id="furry/kotosmix",
+            model_path="kotosmix",
+            category=ModelCategory.I2V,
+            rating=ContentRating.NSFW,
+            vram_mb=8000,
+            resolution=(1024, 1024),
+            max_frames=24,
+            base_model="stabilityai/stable-diffusion-xl-base-1.0",
+        ))
+        
+        self.register(ModelInfo(
+            name="KotosMix-V2",
+            repo_id="furry/kotosmix-v2",
+            model_path="kotosmix-v2",
+            category=ModelCategory.I2V,
+            rating=ContentRating.NSFW,
+            vram_mb=8000,
+            resolution=(1024, 1024),
+            max_frames=24,
+            base_model="stabilityai/stable-diffusion-xl-base-1.0",
+        ))
+        
+        self.register(ModelInfo(
+            name="MeinaMerge",
+            repo_id="meit大陆/meina-merge",
+            model_path="meina-merge",
+            category=ModelCategory.I2V,
+            rating=ContentRating.MATURE,
+            vram_mb=8000,
+            resolution=(1024, 1024),
+            max_frames=24,
+            base_model="stabilityai/stable-diffusion-xl-base-1.0",
+        ))
+        
+        self.register(ModelInfo(
+            name="Anything-v5",
+            repo_id="andite/anything-v5",
+            model_path="anything-v5",
+            category=ModelCategory.I2V,
+            rating=ContentRating.MATURE,
+            vram_mb=8000,
+            resolution=(1024, 1024),
+            max_frames=24,
+            base_model="stabilityai/stable-diffusion-xl-base-1.0",
+        ))
+        
+        self.register(ModelInfo(
+            name="Pony-Diffusion",
+            repo_id="SillyMER/pony-diffusion",
+            model_path="pony-diffusion",
+            category=ModelCategory.I2V,
+            rating=ContentRating.NSFW,
+            vram_mb=8000,
+            resolution=(1024, 1024),
+            max_frames=24,
+            base_model="stabilityai/stable-diffusion-xl-base-1.0",
+        ))
+        
+        self.register(ModelInfo(
+            name="RC_Models",
+            repo_id="rc-models/rc-video",
+            model_path="rc-models",
+            category=ModelCategory.I2V,
+            rating=ContentRating.NSFW,
+            vram_mb=8000,
+            resolution=(1024, 1024),
+            max_frames=24,
+            base_model="stabilityai/stable-diffusion-xl-base-1.0",
+        ))
+        
+        self.register(ModelInfo(
+            name="FurrySplice",
+            repo_id="furry/furrysplice",
+            model_path="furrysplice",
+            category=ModelCategory.I2V,
+            rating=ContentRating.NSFW,
+            vram_mb=8000,
+            resolution=(1024, 1024),
+            max_frames=24,
+            base_model="stabilityai/stable-diffusion-xl-base-1.0",
+        ))
+        
+        self.register(ModelInfo(
+            name="AnthroFury",
+            repo_id="furry/anthrofury",
+            model_path="anthrofury",
+            category=ModelCategory.I2V,
+            rating=ContentRating.NSFW,
+            vram_mb=8000,
+            resolution=(1024, 1024),
+            max_frames=24,
+            base_model="stabilityai/stable-diffusion-xl-base-1.0",
+        ))
+        
+        self.register(ModelInfo(
+            name="FurLora",
+            repo_id="furry/furlora",
+            model_path="furlora",
+            category=ModelCategory.I2V,
+            rating=ContentRating.NSFW,
+            vram_mb=4000,
+            resolution=(512, 768),
+            max_frames=16,
+            base_model="runwayml/stable-diffusion-v1-5",
+        ))
     
     def register(self, model: ModelInfo):
         """Register a model in the registry."""

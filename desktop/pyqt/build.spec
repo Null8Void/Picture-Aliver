@@ -46,8 +46,18 @@ try:
 except:
     torch_c_datas = []
 
+# Collect numpy and other critical binaries
+numpy_all = collect_all('numpy')
+numpy_datas = numpy_all[0] if numpy_all else []
+
 # Combine all datas
-all_datas = list(torch_datas) + list(torchvision_datas) + list(torch_c_datas)
+all_datas = list(torch_datas) + list(torchvision_datas) + list(torch_c_datas) + list(numpy_datas) + [
+    (str(PROJECT_ROOT / "configs"), "configs"),
+    (str(PROJECT_ROOT / "src/picture_aliver/config.yaml"), "src/picture_aliver"),
+    (str(PROJECT_ROOT / "src/utils"), "src/utils"),
+    (str(PROJECT_ROOT / "src/core"), "src/core"),
+    (str(PROJECT_ROOT / "src/modules"), "src/modules"),
+]
 
 a = Analysis(
     [str(SCRIPT_PATH)],
@@ -56,13 +66,7 @@ a = Analysis(
         str(PROJECT_ROOT / "src"),
     ],
     binaries=[],
-    datas=all_datas + [
-        (str(PROJECT_ROOT / "configs"), "configs"),
-        (str(PROJECT_ROOT / "src/picture_aliver/config.yaml"), "src/picture_aliver"),
-        (str(PROJECT_ROOT / "src/utils"), "src/utils"),
-        (str(PROJECT_ROOT / "src/core"), "src/core"),
-        (str(PROJECT_ROOT / "src/modules"), "src/modules"),
-    ],
+    datas=all_datas,
     hiddenimports=[
         # PyQt5
         "PyQt5",
@@ -99,22 +103,20 @@ a = Analysis(
         "src.picture_aliver.exporter",
         "src.picture_aliver.model_manager",
         "src.picture_aliver.model_manager_extended",
-        # Core modules
+# Core modules
         "src.core.pipeline",
         "src.core.model_registry",
         "src.core.model_loader",
         "src.core.device",
         "src.core.config",
         "src.core.config_extension",
-        # Utils
-        "src.utils.logger",
-        "src.utils.image_utils",
-        "src.utils.video_utils",
-        # Modules
+        # Generation modules (includes furry models)
         "src.modules.generation.video_generator",
         "src.modules.generation.depth_conditioning",
+        "src.modules.generation.furry_models",
         "src.modules.motion.motion_injector",
         "src.modules.motion.camera_motion",
+        "src.modules.motion.furry_motions",
         "src.modules.depth.depth_estimator",
         "src.modules.segmentation.segmentor",
     ],

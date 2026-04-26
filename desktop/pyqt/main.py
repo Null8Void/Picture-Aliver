@@ -1029,69 +1029,62 @@ class MainWindow(QMainWindow):
         logger.info("[Model Discovery] Scanning model registry...")
         
         try:
-            from src.core.model_registry import MODEL_REGISTRY, ModelCategory
+            from src.core.model_registry import MODEL_REGISTRY, ModelCategory, ContentRating
             
             # Get all I2V models from registry
             i2v_models = MODEL_REGISTRY.get_by_category(ModelCategory.I2V)
             
-            # Also get furry models
-            try:
-                from src.modules.generation.furry_models import FURRY_MODELS
-                logger.info(f"[Model Discovery] Found {len(FURRY_MODELS)} furry-specific models")
-            except ImportError:
-                FURRY_MODELS = {}
+            # Sort by rating (nsfw first, then mature, then safe) for easier access
+            rating_order = {"nsfw": 0, "mature": 1, "safe": 2}
+            i2v_models = sorted(i2v_models, key=lambda m: (rating_order.get(m.rating.value, 1), m.name))
             
-            # Add models from registry (sorted by rating for organization)
             for model in i2v_models:
                 model_id = model.model_path.lower()
-                display_name = f"{model.name} ({model.rating.value})"
+                rating_icon = {"nsfw": "[+]", "mature": "[~]", "safe": "[-]"}[model.rating.value]
+                display_name = f"{model.name} {rating_icon}"
                 available.append((model_id, display_name))
-                logger.info(f"[Model Discovery] Available: {model.name} [{model.rating.value}]")
+                logger.info(f"[Model Discovery] {model.name} [{model.rating.value}]")
             
-            # Add furry-specific models
-            for furry_id, furry_info in FURRY_MODELS.items():
-                if furry_id not in [a[0] for a in available]:
-                    available.append((furry_id, f"{furry_info.name} (furry)"))
-                    logger.info(f"[Model Discovery] Furry: {furry_info.name}")
+            logger.info(f"[Model Discovery] Found {len(i2v_models)} I2V models")
             
         except ImportError as e:
             logger.warning(f"[Model Discovery] Cannot import MODEL_REGISTRY: {e}")
-            # Fallback to basic models
-            available = [
-                ("wan21", "Wan 2.1 (High Quality)"),
-                ("wan22", "Wan 2.2 (Latest)"),
-                ("lightx2v", "LightX2V (Fast)"),
-                ("fluffyrock", "Fluffyrock"),
-                ("yiffymix", "Yiffymix"),
-                ("dreamshaper", "Dreamshaper"),
-                ("hunyuan", "HunyuanVideo"),
-                ("ltx", "LTX-Video"),
-            ]
+            available = self._get_default_models()
         
         # If still empty, use defaults
         if not available:
-            available = [
-                ("wan21", "Wan 2.1 (High Quality)"),
-                ("wan22", "Wan 2.2 (Latest)"),
-                ("lightx2v", "LightX2V (Fast)"),
-                ("fluffyrock", "Fluffyrock"),
-                ("fluffyrock_unbound", "Fluffyrock Unbound"),
-                ("yiffymix", "Yiffymix"),
-                ("yiffymix_v2", "Yiffymix V2"),
-                ("dreamshaper", "Dreamshaper"),
-                ("dreamshaper_xl", "Dreamshaper XL"),
-                ("pawpunk", "PawPunk"),
-                ("furryforge", "FurryForge"),
-                ("feralcraft", "FeralCraft"),
-                ("kemonomimi", "Kemonomimi Mix"),
-                ("creaturecraft", "CreatureCraft"),
-                ("hunyuan", "HunyuanVideo"),
-                ("ltx", "LTX-Video"),
-                ("legacy", "Legacy Pipeline"),
-            ]
+            available = self._get_default_models()
         
-        logger.info(f"[Model Discovery] Total models available: {len(available)}")
+        logger.info(f"[Model Discovery] Total models: {len(available)}")
         return available
+    
+    def _get_default_models(self):
+        """Get default model list."""
+        return [
+            ("wan21", "Wan 2.1 (High Quality)"),
+            ("wan22", "Wan 2.2 (Latest)"),
+            ("lightx2v", "LightX2V (Fast)"),
+            ("fluffyrock", "Fluffyrock [+]"),
+            ("fluffyrock_unbound", "Fluffyrock-Unbound [+]"),
+            ("yiffymix", "Yiffymix [+]"),
+            ("yiffymix_v2", "Yiffymix-V2 [+]"),
+            ("dreamshaper", "Dreamshaper [~]"),
+            ("dreamshaper_xl", "Dreamshaper-XL [~]"),
+            ("pawpunk", "PawPunk [+]"),
+            ("furryforge", "FurryForge [+]"),
+            ("feralcraft", "FeralCraft [~]"),
+            ("kemonomimi", "Kemonomimi [~]"),
+            ("creaturecraft", "CreatureCraft [+]"),
+            ("bluepencil", "BluePencil [+]"),
+            ("kotosmix", "KotosMix [+]"),
+            ("meina_merge", "MeinaMerge [~]"),
+            ("anything_v5", "Anything-v5 [~]"),
+            ("pony_diffusion", "Pony-Diffusion [+]"),
+            ("furry_splice", "FurrySplice [+]"),
+            ("hunyuan", "HunyuanVideo"),
+            ("ltx", "LTX-Video"),
+            ("legacy", "Legacy Pipeline"),
+        ]
     
     def _check_model_available(self, model_type: str) -> bool:
         """Check if a specific model type is available."""
