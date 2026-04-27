@@ -115,10 +115,10 @@ class ModelConfig:
     height: int = 480
     width: int = 832
     enable_offload: bool = True
-    torch_dtype: str = "bfloat16"
+    torch_dtype: str = "float32"
     negative_prompt: str = ""
     output_dir: str = "./outputs"
-    device: str = "cuda"
+    device: str = "auto"
 
 
 class VideoModel:
@@ -198,7 +198,7 @@ class VideoModel:
             from diffusers.utils import export_to_video, load_image
             from transformers import CLIPVisionModel
             
-            dtype = getattr(torch, self.config.torch_dtype, torch.bfloat16)
+            dtype = getattr(torch, self.config.torch_dtype, torch.float32)
             
             self._logger.info(f"Loading Wan 2.1: {self.config.model_id}")
             
@@ -266,7 +266,7 @@ class VideoModel:
             from diffusers import WanImageToVideoPipeline
             from diffusers.utils import export_to_video, load_image
             
-            dtype = getattr(torch, self.config.torch_dtype, torch.bfloat16)
+            dtype = getattr(torch, self.config.torch_dtype, torch.float32)
             self._logger.info(f"Loading Wan 2.2: {self.config.model_id}")
             
             self._pipeline = WanImageToVideoPipeline.from_pretrained(
