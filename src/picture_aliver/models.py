@@ -297,7 +297,7 @@ class VideoModel:
             
             self._pipeline = HunyuanVideoPipeline.from_pretrained(
                 self.config.model_id,
-                torch_dtype=torch.bfloat16,
+                torch_dtype=torch.float32,
             )
             
             if self.config.enable_offload:
@@ -321,7 +321,7 @@ class VideoModel:
             
             self._pipeline = LTXVideoPipeline.from_pretrained(
                 self.config.model_id,
-                torch_dtype=torch.float16,
+                torch_dtype=torch.float32,
             )
             
             if self.config.enable_offload:
@@ -345,7 +345,7 @@ class VideoModel:
             
             self._pipeline = CogVideoPipeline.from_pretrained(
                 self.config.model_id,
-                torch_dtype=torch.bfloat16,
+                torch_dtype=torch.float32,
             )
             
             if self.config.enable_offload:
@@ -369,7 +369,7 @@ class VideoModel:
             
             self._pipeline = StableVideoDiffusionPipeline.from_pretrained(
                 self.config.model_id,
-                torch_dtype=torch.bfloat16,
+                torch_dtype=torch.float32,
             )
             
             if self.config.enable_offload:
@@ -393,7 +393,7 @@ class VideoModel:
             
             self._pipeline = DiffusionPipeline.from_pretrained(
                 self.config.model_id,
-                torch_dtype=torch.float16,
+                torch_dtype=torch.float32,
             )
             
             if self.config.enable_offload:
