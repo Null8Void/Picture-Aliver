@@ -73,8 +73,17 @@ numpy_all = collect_all('numpy')
 numpy_datas = numpy_all[0] if numpy_all else []
 numpy_binaries = numpy_all[1] if len(numpy_all) > 1 else []
 
-# Final binaries - include torch DLLs explicitly 
-all_binaries = all_binaries + list(numpy_binaries)
+# Final binaries - include torch DLLs explicitly and MSVC runtime
+msvc_dlls = [
+    ("C:/Windows/System32/msvcp140.dll", "."),
+    ("C:/Windows/System32/msvcp140_1.dll", "."),
+    ("C:/Windows/System32/msvcp140_2.dll", "."),
+    ("C:/Windows/System32/vcruntime140.dll", "."),
+    ("C:/Windows/System32/vcruntime140_1.dll", "."),
+    ("C:/Windows/System32/vcomp140.dll", "."),
+    ("C:/Windows/System32/vcruntime140_threads.dll", "."),
+]
+all_binaries = all_binaries + list(numpy_binaries) + msvc_dlls
 
 a = Analysis(
     [str(SCRIPT_PATH)],
