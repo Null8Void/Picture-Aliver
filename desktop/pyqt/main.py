@@ -200,8 +200,8 @@ class GenerationWorker(QThread):
                 # Show which models were tried
                 if "attempts" in result:
                     for attempt in result["attempts"]:
-                        model_name = attempt.get("model_type", "unknown")
-                        model_error = attempt.get("error", "unknown")
+                        model_name = getattr(attempt, "model_type", "unknown")
+                        model_error = getattr(attempt, "error", "unknown")
                         self.log_message.emit(f"  -> {model_name}: {model_error}")
                 self.finished.emit(False, f"Generation failed: {error}", "")
                 
