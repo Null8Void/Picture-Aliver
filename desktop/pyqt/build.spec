@@ -84,6 +84,11 @@ a = Analysis(
     ],
     binaries=all_binaries,
     datas=all_datas,
+    excludes=[
+        'tkinter',
+        'Tkinter',
+        '_tkinter',
+    ],
     hiddenimports=[
         # PyQt5
         "PyQt5",
