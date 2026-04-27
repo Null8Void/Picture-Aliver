@@ -127,11 +127,12 @@ class GenerationWorker(QThread):
     finished = pyqtSignal(bool, str, str)  # success, message, video_path
     log_message = pyqtSignal(str)  # log line
     
-    def __init__(self, image_path: str, params: dict, use_unified_model: bool = True):
+    def __init__(self, image_path: str, params: dict, use_unified_model: bool = True, device: str = "cuda"):
         super().__init__()
         self.image_path = image_path
         self.params = params
         self.use_unified_model = use_unified_model
+        self.device = device
         self._running = True
         
     def run(self):
@@ -159,10 +160,11 @@ class GenerationWorker(QThread):
             self.progress.emit("Loading model...", 10)
             self.log_message.emit("[Worker] Loading model with fallback support...")
             
-            # Create manager with fallback
+            # Create manager with fallback and device
             manager = ModelManager(
                 primary="wan21",
-                fallback="legacy"
+                fallback="legacy",
+                device=self.device
             )
             
             self.progress.emit("Generating video...", 30)
@@ -213,6 +215,7 @@ class GenerationWorker(QThread):
             motion_mode=self.params.get('motion_mode', 'auto'),
             enable_quality_check=self.params.get('enable_quality_check', True),
             enable_stabilization=True,
+            device=self.device,
             debug=DebugConfig(enabled=False)
         )
         
@@ -552,8 +555,20 @@ class MainWindow(QMainWindow):
         self.quality_check.setStyleSheet("font-weight: bold;")
         settings_layout.addWidget(self.quality_check)
         
-        layout.addWidget(settings_group)
-        
+layout.addWidget(settings_group)
+
+        # Device selection (GPU/CPU)
+        device_layout = QHBoxLayout()
+        device_layout.addWidget(QLabel("⚡ Device:"))
+        self.device_combo = QComboBox()
+        self.device_combo.addItems(["cuda", "cpu"])
+        self.device_combo.setCurrentText("cuda")
+        self.device_combo.setStyleSheet("padding: 6px; border-radius: 4px; font-weight: bold;")
+        self.device_combo.setToolTip("GPU requires CUDA-compatible graphics card")
+        device_layout.addWidget(self.device_combo)
+        device_layout.addStretch()
+        layout.addLayout(device_layout)
+
         # Generate button
         self.generate_btn = QPushButton("🎬 Generate Video")
         self.generate_btn.setMinimumHeight(55)
@@ -848,7 +863,8 @@ class MainWindow(QMainWindow):
         if selected_model == "Loading models...":
             selected_model = "legacy"
         
-        # Get settings
+# Get settings
+        device = self.device_combo.currentText()
         params = {
             'duration': self.duration_slider.value(),
             'fps': int(self.fps_combo.currentText()),
@@ -860,24 +876,12 @@ class MainWindow(QMainWindow):
             'enable_quality_check': self.quality_check.isChecked(),
             'prompt': prompt,
             'model': selected_model,
+            'device': device,
         }
-        
-        # Update UI
-        self.generate_btn.setEnabled(False)
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
-        self.status_bar.showMessage("🎬 Generating video...")
-        self.log("=" * 40)
-        self.log(f"📷 Image: {self.selected_image_path}")
-        self.log(f"📝 Prompt: {prompt}")
-        self.log(f"🎬 Model: {selected_model}")
-        self.log(f"⏱ Duration: {params['duration']}s @ {params['fps']} FPS")
-        self.log(f"📐 Resolution: {params['width']}x{params['height']}")
-        self.log("=" * 40)
         
         # Start worker thread with unified model
         self._use_unified_model = (selected_model != "legacy")
-        self.worker = GenerationWorker(self.selected_image_path, params, self._use_unified_model)
+        self.worker = GenerationWorker(self.selected_image_path, params, self._use_unified_model, device)
         self.worker.progress.connect(self.on_progress)
         self.worker.finished.connect(self.on_finished)
         self.worker.log_message.connect(self.log)
