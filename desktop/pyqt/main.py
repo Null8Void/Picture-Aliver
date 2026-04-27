@@ -1039,6 +1039,30 @@ class MainWindow(QMainWindow):
             self.model_info.setText(f"Error checking GPU: {str(e)[:30]}")
         
         self.refresh_model_list()
+        
+        # Preload models in background
+        self._preload_models()
+    
+    def _preload_models(self):
+        """Preload models in background on startup."""
+        import threading
+        from src.picture_aliver.model_manager import ModelManager
+        
+        def preload():
+            self.log_message.emit("[Startup] Preloading models...")
+            try:
+                manager = ModelManager(primary="legacy", device="auto")
+                # Preload the legacy pipeline model quietly
+                model = manager.load_model("legacy")
+                if model:
+                    self.log_message.emit("[Startup] Legacy model ready")
+                else:
+                    self.log_message.emit("[Startup] Model preload skipped")
+            except Exception as e:
+                self.log_message.emit(f"[Startup] Preload: {e}")
+        
+        thread = threading.Thread(target=preload, daemon=True)
+        thread.start()
     
     def get_available_models(self):
         """Detect available models from MODEL_REGISTRY."""

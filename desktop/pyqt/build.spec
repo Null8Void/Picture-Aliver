@@ -107,9 +107,19 @@ a = Analysis(
         # PyTorch
         "torch",
         "torchvision",
+        "torchvision.ops",
         "torch.nn",
         "torch.nn.functional",
         "torch._C",
+        "torch.cuda",
+        # Diffusers
+        "diffusers",
+        "diffusers.pipelines",
+        "diffusers.pipelines.video",
+        "diffusers.pipelines.image_transforms",
+        # Transformers
+        "transformers",
+        "transformers.modeling_utils",
         # FastAPI
         "uvicorn",
         "uvicorn.logging",
@@ -118,7 +128,7 @@ a = Analysis(
         "starlette",
         "pydantic",
         "python_multipart",
-        # Pipeline modules
+        # Pipeline modules - ALL of them
         "src.picture_aliver.main",
         "src.picture_aliver.api",
         "src.picture_aliver.config",
