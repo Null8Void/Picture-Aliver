@@ -227,7 +227,7 @@ class SegmentationModule:
         if mask.dim() > 2:
             mask = mask.squeeze()
         
-        unique_classes = torch.unique(mask).tolist()
+        unique_classes = [int(x) for x in torch.unique(mask).tolist()]
         
         categories = []
         for cls_idx in unique_classes:
