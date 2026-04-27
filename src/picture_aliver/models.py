@@ -666,6 +666,7 @@ class VideoModel:
     ) -> GenerationResult:
         """Generate using legacy pipeline."""
         from src.picture_aliver.main import Pipeline, PipelineConfig
+        from pathlib import Path as P
         
         config = PipelineConfig(
             duration_seconds=duration,
@@ -679,7 +680,7 @@ class VideoModel:
             image_path=str(image),
             prompt=prompt,
             config=config,
-            output_path=output_path,
+            output_path=P(output_path),
         )
         
         return GenerationResult(
